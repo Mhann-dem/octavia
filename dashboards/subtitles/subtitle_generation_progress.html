@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Subtitle Generation Progress</title>
+    <link rel="stylesheet" href="../shared-styles.css">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;900&family=Inter:wght@400;500;700&display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+    <style type="text/tailwindcss">
+        .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+  </style>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#9333EA",
+                        "primary-bright": "#A855F7",
+                        "primary-dark": "#7E22CE",
+                        "accent-cyan": "#06B6D4",
+                        "accent-pink": "#EC4899",
+                        "background-dark": "#0A0118",
+                        "background-darker": "#050008",
+                    },
+                    fontFamily: {
+                        "display": ["Inter Tight", "Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "2xl": "1rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+</head>
+
+<body class="font-body premium-bg" style="min-height: 100vh;">
+    <div class="relative flex h-screen min-h-screen w-full flex-row overflow-hidden">
+        <!-- SideNavBar -->
+        <div
+            class="flex h-full w-64 flex-col justify-between border-r border-white/10 bg-[#0D0221]/50 backdrop-blur-xl p-4">
+            <div class="flex flex-col gap-4">
+                <div class="flex items-center gap-3 px-3 mb-2">
+                    <div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 ring-2 ring-primary/30 shadow-glow"
+                        data-alt="Abstract purple logo"
+                        style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAJKS5Tj_PF4e5c_7DsvNJ2saVEUSoX4rRgCzE5y3urC6mlPUlO1D2dyIsJqityMOz-zZxLM0BCPhvpxCnlbTYWKKGeavackuFOvWQuSA3sfzcu2rHwA9rvM-SVmFOhgCWYsfJphcoWWKE64smmZt5O81xZPATwa2_FUzleYbtZT56Q8SvW19WxWdXYqCJLZ6q34IQ8RKjGf7xc3TsRUhORxWV5hlOEJ-M1SMaDjp2hohUJLeWCuiM59HP8Yi7IAMejs0DuKQJ79J4");'>
+                    </div>
+                    <div class="flex flex-col">
+                        <h1 class="text-white text-base font-bold leading-normal">Octavia</h1>
+                        <p class="text-slate-500 text-xs font-normal leading-normal">AI Translation Suite</p>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <div
+                        class="flex cursor-pointer items-center gap-3 rounded-lg border-glow px-3 py-2.5 transition-all hover:bg-primary/20">
+                        <span class="material-symbols-outlined text-primary-bright">translate</span>
+                        <p class="text-primary-bright text-sm font-semibold leading-normal">New Translation</p>
+                    </div>
+                    <div
+                        class="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-slate-400 hover:bg-white/5 hover:text-white rounded-lg transition-all">
+                        <span class="material-symbols-outlined">hub</span>
+                        <p class="text-sm font-medium leading-normal">Hub</p>
+                    </div>
+                    <div
+                        class="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-slate-400 hover:bg-white/5 hover:text-white rounded-lg transition-all">
+                        <span class="material-symbols-outlined">folder</span>
+                        <p class="text-sm font-medium leading-normal">Projects </p>
+                    </div>
+                    <div
+                        class="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-slate-400 hover:bg-white/5 hover:text-white rounded-lg transition-all">
+                        <span class="material-symbols-outlined">settings</span>
+                        <p class="text-sm font-medium leading-normal">Settings</p>
+                    </div>
+                </div>
+            </div>
+            <div class="flex flex-col gap-1.5">
+                <div
+                    class="flex cursor-pointer items-center gap-3 px-3 py-2 text-slate-500 hover:bg-white/5 hover:text-slate-300 rounded-lg transition-all">
+                    <span class="material-symbols-outlined text-sm">help</span>
+                    <p class="text-xs font-medium leading-normal">Help</p>
+                </div>
+                <div
+                    class="flex cursor-pointer items-center gap-3 px-3 py-2 text-slate-500 hover:bg-white/5 hover:text-slate-300 rounded-lg transition-all">
+                    <span class="material-symbols-outlined text-sm">support_agent</span>
+                    <p class="text-xs font-medium leading-normal">Support</p>
+                </div>
+                <div
+                    class="flex cursor-pointer items-center gap-3 px-3 py-2 text-slate-500 hover:bg-white/5 hover:text-slate-300 rounded-lg transition-all">
+                    <span class="material-symbols-outlined text-sm">logout</span>
+                    <p class="text-xs font-medium leading-normal">Logout</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto p-8 custom-scrollbar relative">
+            <!-- Ambient Background Glow -->
+            <div class="glow-purple"
+                style="width: 500px; height: 500px; position: fixed; top: -100px; right: -100px; z-index: 0; opacity: 0.4;">
+            </div>
+
+            <div class="mx-auto max-w-4xl relative z-10">
+                <!-- Page Heading -->
+                <div class="flex flex-wrap items-center justify-between gap-4 mb-8">
+                    <div class="flex flex-col gap-1">
+                        <h1 class="font-display text-3xl font-black text-white text-glow-purple">Subtitle Generation
+                            Progress</h1>
+                        <p class="text-slate-400 text-sm">Project: Annual_Report_2024_Final.mp4</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button
+                            class="flex items-center gap-2 rounded-lg bg-white/5 border border-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/10 transition-colors">
+                            <span class="material-symbols-outlined text-base">pause</span> Pause
+                        </button>
+                        <button
+                            class="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-400 hover:bg-red-500/20 hover:border-red-500/50 transition-colors">
+                            <span class="material-symbols-outlined text-base">cancel</span> Cancel
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="glass-panel glass-panel-glow p-6 mb-6">
+                    <div class="flex gap-6 justify-between items-center mb-3">
+                        <p class="text-white text-base font-medium">Overall Progress</p>
+                        <p class="text-primary-bright text-lg font-bold">65%</p>
+                    </div>
+                    <div class="w-full bg-white/5 rounded-full h-2.5 mb-2">
+                        <div class="bg-primary h-2.5 rounded-full shadow-glow transition-all duration-500"
+                            style="width: 65%"></div>
+                    </div>
+                    <p class="text-slate-400 text-sm">Transcribing segment 15 of 200</p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2">
+                        <!-- Timeline -->
+                        <div class="glass-panel p-6">
+                            <h3 class="text-lg font-bold text-white mb-6">Processing Steps</h3>
+                            <div class="relative pl-4 border-l border-white/10 space-y-8">
+                                <!-- Step 1: Completed -->
+                                <div class="relative pl-6">
+                                    <div
+                                        class="absolute -left-[21px] top-0 flex items-center justify-center w-10 h-10 rounded-full bg-green-500/20 border border-green-500/30 text-green-400 shadow-glow">
+                                        <span class="material-symbols-outlined text-xl">check_circle</span>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-white font-medium text-base">Transcribing Audio</h4>
+                                        <p class="text-slate-400 text-sm mt-1">Completed successfully.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Step 2: Active -->
+                                <div class="relative pl-6">
+                                    <div
+                                        class="absolute -left-[21px] top-0 flex items-center justify-center w-10 h-10 rounded-full bg-primary/20 border border-primary/30 text-primary-bright shadow-glow animate-pulse">
+                                        <span
+                                            class="material-symbols-outlined text-xl animate-spin">progress_activity</span>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-white font-medium text-base text-glow-purple">Generating
+                                            Subtitles</h4>
+                                        <p class="text-primary-bright text-sm mt-1">In Progress...</p>
+                                    </div>
+                                </div>
+
+                                <!-- Step 3: Pending -->
+                                <div class="relative pl-6 opacity-50">
+                                    <div
+                                        class="absolute -left-[21px] top-0 flex items-center justify-center w-10 h-10 rounded-full bg-white/5 border border-white/10 text-slate-500">
+                                        <span class="material-symbols-outlined text-xl">schedule</span>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-white font-medium text-base">Translating Subtitles (to French)
+                                        </h4>
+                                        <p class="text-slate-500 text-sm mt-1">Pending</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="lg:col-span-1">
+                        <!-- Stats -->
+                        <div class="glass-panel p-6 h-full flex flex-col justify-center items-center text-center gap-2">
+                            <div class="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-2">
+                                <span class="material-symbols-outlined text-3xl text-slate-300">timer</span>
+                            </div>
+                            <p class="text-slate-400 text-sm font-medium">Estimated Time Remaining</p>
+                            <p class="text-white text-4xl font-black text-glow-purple">~ 3 min</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+
+</html>

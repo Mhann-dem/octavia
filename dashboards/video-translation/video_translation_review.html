@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Video Translation Review</title>
+    <link rel="stylesheet" href="../shared-styles.css">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;900&family=Inter:wght@400;500;700&display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+    <style type="text/tailwindcss">
+        .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #9333EA;
+      border-radius: 9999px;
+      cursor: pointer;
+      margin-top: -6px;
+      box-shadow: 0 0 10px rgba(147, 51, 234, 0.5);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #9333EA;
+      border-radius: 9999px;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(147, 51, 234, 0.5);
+    }
+  </style>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#9333EA",
+                        "primary-bright": "#A855F7",
+                        "primary-dark": "#7E22CE",
+                        "accent-cyan": "#06B6D4",
+                        "accent-pink": "#EC4899",
+                        "background-dark": "#0A0118",
+                        "background-darker": "#050008",
+                    },
+                    fontFamily: {
+                        "display": ["Inter Tight", "Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "2xl": "1rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+</head>
+
+<body class="font-body premium-bg" style="min-height: 100vh;">
+    <div class="relative flex h-screen min-h-screen w-full flex-row overflow-hidden">
+        <!-- SideNavBar -->
+        <div
+            class="flex h-full w-64 flex-col justify-between border-r border-white/10 bg-[#0D0221]/50 backdrop-blur-xl p-4">
+            <div class="flex flex-col gap-4">
+                <div class="flex items-center gap-3 px-3 mb-2">
+                    <div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 ring-2 ring-primary/30 shadow-glow"
+                        data-alt="Abstract purple logo"
+                        style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAJKS5Tj_PF4e5c_7DsvNJ2saVEUSoX4rRgCzE5y3urC6mlPUlO1D2dyIsJqityMOz-zZxLM0BCPhvpxCnlbTYWKKGeavackuFOvWQuSA3sfzcu2rHwA9rvM-SVmFOhgCWYsfJphcoWWKE64smmZt5O81xZPATwa2_FUzleYbtZT56Q8SvW19WxWdXYqCJLZ6q34IQ8RKjGf7xc3TsRUhORxWV5hlOEJ-M1SMaDjp2hohUJLeWCuiM59HP8Yi7IAMejs0DuKQJ79J4");'>
+                    </div>
+                    <div class="flex flex-col">
+                        <h1 class="text-white text-base font-bold leading-normal">Octavia</h1>
+                        <p class="text-slate-500 text-xs font-normal leading-normal">AI Translation Suite</p>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <div
+                        class="flex cursor-pointer items-center gap-3 rounded-lg border-glow px-3 py-2.5 transition-all hover:bg-primary/20">
+                        <span class="material-symbols-outlined text-primary-bright">translate</span>
+                        <p class="text-primary-bright text-sm font-semibold leading-normal">New Translation</p>
+                    </div>
+                    <div
+                        class="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-slate-400 hover:bg-white/5 hover:text-white rounded-lg transition-all">
+                        <span class="material-symbols-outlined">hub</span>
+                        <p class="text-sm font-medium leading-normal">Hub</p>
+                    </div>
+                    <div
+                        class="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-slate-400 hover:bg-white/5 hover:text-white rounded-lg transition-all">
+                        <span class="material-symbols-outlined">folder</span>
+                        <p class="text-sm font-medium leading-normal">Projects </p>
+                    </div>
+                    <div
+                        class="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-slate-400 hover:bg-white/5 hover:text-white rounded-lg transition-all">
+                        <span class="material-symbols-outlined">settings</span>
+                        <p class="text-sm font-medium leading-normal">Settings</p>
+                    </div>
+                </div>
+            </div>
+            <div class="flex flex-col gap-1.5">
+                <div
+                    class="flex cursor-pointer items-center gap-3 px-3 py-2 text-slate-500 hover:bg-white/5 hover:text-slate-300 rounded-lg transition-all">
+                    <span class="material-symbols-outlined text-sm">help</span>
+                    <p class="text-xs font-medium leading-normal">Help</p>
+                </div>
+                <div
+                    class="flex cursor-pointer items-center gap-3 px-3 py-2 text-slate-500 hover:bg-white/5 hover:text-slate-300 rounded-lg transition-all">
+                    <span class="material-symbols-outlined text-sm">support_agent</span>
+                    <p class="text-xs font-medium leading-normal">Support</p>
+                </div>
+                <div
+                    class="flex cursor-pointer items-center gap-3 px-3 py-2 text-slate-500 hover:bg-white/5 hover:text-slate-300 rounded-lg transition-all">
+                    <span class="material-symbols-outlined text-sm">logout</span>
+                    <p class="text-xs font-medium leading-normal">Logout</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto p-8 custom-scrollbar relative">
+            <!-- Ambient Background Glow -->
+            <div class="glow-purple"
+                style="width: 500px; height: 500px; position: fixed; top: -100px; right: -100px; z-index: 0; opacity: 0.4;">
+            </div>
+
+            <div class="mx-auto max-w-7xl relative z-10">
+                <div class="flex flex-col lg:flex-row gap-8">
+                    <!-- Left Column: Video Player -->
+                    <div class="flex-1 flex flex-col gap-4">
+                        <div class="glass-panel p-1">
+                            <div class="relative flex items-center justify-center bg-black bg-cover bg-center aspect-video rounded-lg overflow-hidden group"
+                                style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCYQX04jj4CALm29yjRulsmu3X9bdbY1XiKC1aXrJ6wv0q0ypjcLGSsjBENkRZOp-LNH5h3CsXvjpRcQmhaObtfKjywzuWX8qRiRkicjjTbiUDaVf4I9VxiumSWbbU3r4V09mo3mi2LrM7IOQejnincF_p56R3yCLk3-QqGE43m0j2fZUiVZaYOnD-twbeUVqCWvo4clh0dAI5S2b_gM6MVDly9tiGfkBl2k9IzluvP0v9Wil6VqGRTaiIoQDxyu1K12wdexd0jHOg");'>
+                                <div class="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-colors">
+                                </div>
+                                <button
+                                    class="relative z-10 flex shrink-0 items-center justify-center rounded-full size-16 bg-white/10 text-white backdrop-blur-md border border-white/20 hover:scale-110 transition-all shadow-glow">
+                                    <span class="material-symbols-outlined text-4xl"
+                                        style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+                                </button>
+                                <div
+                                    class="absolute inset-x-0 bottom-0 px-4 py-3 bg-gradient-to-t from-black/80 to-transparent">
+                                    <div
+                                        class="flex h-1 items-center justify-center gap-0 mb-2 cursor-pointer group/timeline">
+                                        <div
+                                            class="h-1 flex-1 rounded-l-full bg-primary shadow-[0_0_10px_rgba(168,85,247,0.5)]">
+                                        </div>
+                                        <div class="relative">
+                                            <div
+                                                class="size-3 rounded-full bg-white ring-4 ring-primary/30 scale-0 group-hover/timeline:scale-100 transition-transform">
+                                            </div>
+                                        </div>
+                                        <div class="h-1 flex-[3] rounded-r-full bg-white/20"></div>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <p class="text-white text-xs font-medium tracking-wide">0:37</p>
+                                        <p class="text-slate-300 text-xs font-medium tracking-wide">2:23</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Preview Controls -->
+                        <div class="flex p-1 bg-white/5 rounded-lg border border-white/10">
+                            <label class="flex-1 cursor-pointer">
+                                <input type="radio" name="preview-mode" value="full" class="peer sr-only" checked>
+                                <div
+                                    class="flex items-center justify-center py-2 rounded-md text-sm font-medium text-slate-400 peer-checked:bg-primary/20 peer-checked:text-white peer-checked:shadow-sm transition-all">
+                                    Full Preview
+                                </div>
+                            </label>
+                            <label class="flex-1 cursor-pointer">
+                                <input type="radio" name="preview-mode" value="spot1" class="peer sr-only">
+                                <div
+                                    class="flex items-center justify-center py-2 rounded-md text-sm font-medium text-slate-400 peer-checked:bg-primary/20 peer-checked:text-white peer-checked:shadow-sm transition-all">
+                                    Check Spot 1
+                                </div>
+                            </label>
+                            <label class="flex-1 cursor-pointer">
+                                <input type="radio" name="preview-mode" value="spot2" class="peer sr-only">
+                                <div
+                                    class="flex items-center justify-center py-2 rounded-md text-sm font-medium text-slate-400 peer-checked:bg-primary/20 peer-checked:text-white peer-checked:shadow-sm transition-all">
+                                    Check Spot 2
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Stats & Actions -->
+                    <div class="w-full lg:w-96 flex flex-col gap-6">
+                        <div class="flex flex-col gap-2">
+                            <h1 class="font-display text-3xl font-black text-white text-glow-purple">Your Translation is
+                                Ready!</h1>
+                            <p class="text-slate-400 text-sm">Review the results and download your video.</p>
+                        </div>
+
+                        <!-- Stats Grid -->
+                        <div class="flex flex-col gap-3">
+                            <div class="glass-card p-4 flex items-center gap-4">
+                                <div
+                                    class="flex size-10 items-center justify-center rounded-full bg-green-500/20 text-green-400 shadow-glow">
+                                    <span class="material-symbols-outlined">sync_alt</span>
+                                </div>
+                                <div>
+                                    <p class="text-slate-400 text-xs font-medium uppercase tracking-wider">Sync</p>
+                                    <p class="text-white text-lg font-bold">98% Match</p>
+                                </div>
+                            </div>
+                            <div class="glass-card p-4 flex items-center gap-4">
+                                <div
+                                    class="flex size-10 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 shadow-glow">
+                                    <span class="material-symbols-outlined">timer</span>
+                                </div>
+                                <div>
+                                    <p class="text-slate-400 text-xs font-medium uppercase tracking-wider">Duration</p>
+                                    <p class="text-white text-lg font-bold">Exact Match</p>
+                                </div>
+                            </div>
+                            <div class="glass-card p-4 flex items-center gap-4">
+                                <div
+                                    class="flex size-10 items-center justify-center rounded-full bg-purple-500/20 text-purple-400 shadow-glow">
+                                    <span class="material-symbols-outlined">save</span>
+                                </div>
+                                <div>
+                                    <p class="text-slate-400 text-xs font-medium uppercase tracking-wider">Size</p>
+                                    <p class="text-white text-lg font-bold">Optimized</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="flex flex-col gap-4">
+                            <button
+                                class="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg border border-primary/30 bg-primary/10 text-primary-bright font-bold hover:bg-primary/20 hover:border-primary/50 transition-all group">
+                                <span
+                                    class="material-symbols-outlined group-hover:rotate-12 transition-transform">auto_awesome</span>
+                                AI Refine (e.g. 'Softer voice?')
+                            </button>
+
+                            <div class="pt-4 border-t border-white/10 flex flex-col gap-4">
+                                <button class="btn-border-beam w-full group">
+                                    <span class="btn-border-beam-inner flex items-center justify-center gap-2"
+                                        style="height: 48px; padding: 0 1rem; font-size: 1rem;">
+                                        <span
+                                            class="material-symbols-outlined group-hover:translate-y-1 transition-transform">download</span>
+                                        <span class="font-bold">Download MP4</span>
+                                    </span>
+                                </button>
+                                <label class="flex items-center gap-3 cursor-pointer group">
+                                    <input type="checkbox"
+                                        class="form-checkbox rounded border-white/20 bg-white/5 text-primary focus:ring-primary focus:ring-offset-0 size-4 group-hover:border-primary/50 transition-colors">
+                                    <span
+                                        class="text-sm text-slate-400 group-hover:text-white transition-colors">Include
+                                        original files in .zip</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Feedback -->
+                        <div class="pt-4 border-t border-white/10">
+                            <p class="text-sm font-medium text-slate-300 mb-3">Help us improve: Pacing Feedback</p>
+                            <input type="range" min="1" max="100" value="50"
+                                class="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer">
+                            <div class="flex justify-between text-xs text-slate-500 mt-2">
+                                <span>Too Slow</span>
+                                <span>Too Fast</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+
+</html>
