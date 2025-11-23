@@ -40,18 +40,27 @@ export function Sidebar() {
         <div className="flex h-full w-64 flex-col justify-between border-r border-white/10 bg-[#0D0221]/50 backdrop-blur-xl p-4">
             <div className="flex flex-col gap-6">
                 {/* Logo Area */}
-                <div className="flex items-center gap-3 px-3">
-                    <div className="relative w-10 h-10 flex items-center justify-center shrink-0">
+                <div className="flex items-center gap-3 px-2 py-2">
+                    <div className="relative w-8 h-8 flex items-center justify-center shrink-0 group">
                         <img
                             src="/lunartech_logo_small.png"
                             alt="LunarTech Logo"
-                            className="w-full h-full object-contain"
+                            className="w-full h-full object-contain relative z-10 transition-all duration-500 group-hover:scale-110 group-hover:rotate-12"
                         />
-                        <div className="absolute inset-0 bg-white/30 blur-xl rounded-full opacity-20" />
+                        {/* Multi-layered purple glows */}
+                        <div className="absolute inset-0 bg-primary-purple-bright/60 blur-xl rounded-full animate-pulse" />
+                        <div className="absolute inset-0 bg-primary-purple/40 blur-lg rounded-full opacity-75 group-hover:opacity-100 transition-opacity duration-300" />
+                        <div className="absolute inset-0 bg-accent-cyan/30 blur-md rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                        {/* Outer expanding glow on hover */}
+                        <div className="absolute inset-0 bg-primary-purple-bright/40 blur-2xl rounded-full scale-150 opacity-0 group-hover:opacity-100 group-hover:scale-200 transition-all duration-700" />
                     </div>
                     <div className="flex flex-col">
-                        <h1 className="text-white text-base font-bold leading-normal">Octavia</h1>
-                        <p className="text-slate-500 text-xs font-normal leading-normal">AI Translation Suite</p>
+                        <h1 className="text-white text-lg font-black leading-tight bg-gradient-to-r from-white via-primary-purple-bright to-white bg-clip-text text-transparent">
+                            Octavia
+                        </h1>
+                        <p className="text-xs font-bold leading-tight tracking-wider bg-gradient-to-r from-primary-purple-bright via-accent-cyan to-primary-purple-bright bg-clip-text text-transparent text-glow-purple">
+                            Rise Beyond Language
+                        </p>
                     </div>
                 </div>
 
