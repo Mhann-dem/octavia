@@ -2,7 +2,9 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Video, Mic, FileText, Languages, AudioWaveform, Sparkles } from "lucide-react";
+import { Video, Mic, FileText, Languages, AudioWaveform, Sparkles, LogOut } from "lucide-react";
+import { withAuth } from "@/lib/withAuth";
+import { clearAuthToken } from "@/lib/auth";
 
 const features = [
     {
@@ -104,14 +106,26 @@ const getColorClasses = (color: string) => {
 };
 
 export default function DashboardPage() {
+    const handleLogout = () => {
+        clearAuthToken();
+        window.location.href = '/login';
+    };
+
     return (
         <div className="space-y-8">
             {/* Header */}
-            <div className="flex flex-wrap justify-between gap-3">
+            <div className="flex flex-wrap justify-between items-center gap-3">
                 <div>
                     <h1 className="font-display text-3xl font-black text-white mb-2 text-glow-purple">Hub</h1>
                     <p className="text-slate-400 text-sm">Choose a workflow to get started with AI-powered translation</p>
                 </div>
+                <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 transition-colors"
+                >
+                    <LogOut className="w-4 h-4" />
+                    Logout
+                </button>
             </div>
 
             {/* Feature Cards - 2x3 Grid */}
@@ -171,3 +185,5 @@ export default function DashboardPage() {
         </div>
     );
 }
+
+export default withAuth(DashboardPage);
