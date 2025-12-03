@@ -18,12 +18,11 @@ if config.config_file_name is not None:
 
 # Add your model's MetaData object here
 # for 'autogenerate' support
-try:
-    # import the SQLAlchemy Base from the app
-    from app.db import Base
-    target_metadata = Base.metadata
-except Exception:
-    target_metadata = None
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from app.db import Base
+target_metadata = Base.metadata
 
 
 def get_database_url():

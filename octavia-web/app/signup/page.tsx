@@ -1,10 +1,49 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, Mail, Lock, User } from "lucide-react";
 
 export default function SignupPage() {
+    const router = useRouter();
+    const [name, setName] = useState("");
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [verifyUrl, setVerifyUrl] = useState<string | null>(null);
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        setError(null);
+        setLoading(true);
+        try {
+            const res = await fetch("http://localhost:8001/signup", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, password }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                setError(data?.detail || data?.message || "Signup failed");
+                setLoading(false);
+                return;
+            }
+            // If backend returned verify_url (dev fallback), show it to user
+            if (data?.verify_url) {
+                setVerifyUrl(data.verify_url);
+            }
+            // Redirect to login after signup
+            router.push("/login");
+        } catch (err: any) {
+            setError(err?.message || String(err));
+        } finally {
+            setLoading(false);
+        }
+    }
+
     return (
         <div className="min-h-screen w-full bg-bg-dark flex items-center justify-center relative overflow-hidden">
             {/* Ambient Background Glows */}
@@ -37,12 +76,14 @@ export default function SignupPage() {
                         <p className="text-slate-400 text-sm">Join Octavia to start translating</p>
                     </div>
 
-                    <form className="space-y-4">
+                    <form className="space-y-4" onSubmit={handleSubmit}>
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-slate-300">Full Name</label>
                             <div className="relative">
                                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                                 <input
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
                                     type="text"
                                     placeholder="John Doe"
                                     className="glass-input w-full !pl-12"
@@ -54,6 +95,8 @@ export default function SignupPage() {
                             <div className="relative">
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                                 <input
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
                                     type="email"
                                     placeholder="name@example.com"
                                     className="glass-input w-full !pl-12"
@@ -65,6 +108,8 @@ export default function SignupPage() {
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                                 <input
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
                                     type="password"
                                     placeholder="••••••••"
                                     className="glass-input w-full !pl-12"
@@ -72,12 +117,15 @@ export default function SignupPage() {
                             </div>
                         </div>
 
-                        <button className="w-full btn-border-beam mt-6">
+                        <button type="submit" disabled={loading} className="w-full btn-border-beam mt-6">
                             <div className="btn-border-beam-inner justify-center py-3">
-                                Create Account
+                                {loading ? 'Creating...' : 'Create Account'}
                             </div>
                         </button>
                     </form>
+
+                    {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
+                    {verifyUrl && <div className="mt-4 p-3 bg-white/5 rounded"><p className="text-sm text-slate-200">Verification link (dev):</p><a className="text-primary-purple-bright break-all" href={verifyUrl}>{verifyUrl}</a></div>}
 
                     <div className="mt-6">
                         <div className="relative">

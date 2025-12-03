@@ -1,10 +1,47 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, Mail, Lock } from "lucide-react";
+import { setAuthToken } from "@/lib/auth";
 
 export default function LoginPage() {
+    const router = useRouter();
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        setError(null);
+        setLoading(true);
+        try {
+            const res = await fetch("http://localhost:8001/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, password }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                setError(data?.detail || data?.message || "Login failed");
+                setLoading(false);
+                return;
+            }
+            // store token using auth helper
+            if (data?.access_token) {
+                setAuthToken(data.access_token);
+            }
+            router.push('/dashboard');
+        } catch (err: any) {
+            setError(err?.message || String(err));
+        } finally {
+            setLoading(false);
+        }
+    }
+
     return (
         <div className="min-h-screen w-full bg-bg-dark flex items-center justify-center relative overflow-hidden">
             {/* Ambient Background Glows */}
@@ -37,12 +74,14 @@ export default function LoginPage() {
                         <p className="text-slate-400 text-sm">Sign in to your Octavia account</p>
                     </div>
 
-                    <form className="space-y-4">
+                    <form className="space-y-4" onSubmit={handleSubmit}>
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-slate-300">Email</label>
                             <div className="relative">
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                                 <input
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
                                     type="email"
                                     placeholder="name@example.com"
                                     className="glass-input w-full !pl-12"
@@ -54,6 +93,8 @@ export default function LoginPage() {
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                                 <input
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
                                     type="password"
                                     placeholder="••••••••"
                                     className="glass-input w-full !pl-12"
@@ -61,12 +102,14 @@ export default function LoginPage() {
                             </div>
                         </div>
 
-                        <button className="w-full btn-border-beam mt-6">
+                        <button type="submit" disabled={loading} className="w-full btn-border-beam mt-6">
                             <div className="btn-border-beam-inner justify-center py-3">
-                                Sign In
+                                {loading ? 'Signing in...' : 'Sign In'}
                             </div>
                         </button>
                     </form>
+
+                    {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
 
                     <div className="mt-6">
                         <div className="relative">
