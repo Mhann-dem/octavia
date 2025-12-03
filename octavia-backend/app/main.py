@@ -41,11 +41,11 @@ def signup(payload: schemas.SignupPayload, db_session: Session = Depends(db.get_
     # Attempt to send verification email. If email provider isn't configured, print the link for dev.
     sent = send_verification_email(user.email, verify_url)
 
-    user_out = schemas.UserOut.from_orm(user)
-    response = {"user": user_out}
-    if not sent:
-        # Return the link in response for easier local testing when emails aren't configured
-        response["verify_url"] = verify_url
+    user_out = schemas.UserOut.model_validate(user)
+    response = {
+        "user": user_out.model_dump(),
+        "verify_url": verify_url  # Always include for dev convenience
+    }
     return response
 
 
