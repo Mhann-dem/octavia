@@ -1,0 +1,9 @@
+# Machine-learning and heavy media-processing requirements
+# Install these after installing PyTorch (see README_DEV.md for instructions)
+openai-whisper==20231117
+# Alternative (often easier on Windows): faster-whisper
+# faster-whisper
+
+# Optional / additional model helpers
+transformers==4.34.0
+torchaudio
