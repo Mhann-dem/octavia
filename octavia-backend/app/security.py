@@ -2,6 +2,7 @@ import os
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
 from jose import jwt, JWTError
+from fastapi import HTTPException
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
@@ -40,3 +41,15 @@ def create_verification_token(user_id: str, expires_minutes: int = 60 * 24) -> s
 
 def is_verification_token(payload: dict) -> bool:
     return payload.get("type") == "verify"
+
+
+def get_bearer_token(authorization: str | None = None) -> str:
+    """Extract Bearer token from Authorization header."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing authorization header")
+    
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid authorization header format")
+    
+    return parts[1]

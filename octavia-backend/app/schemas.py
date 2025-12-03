@@ -19,7 +19,7 @@ class TokenResponse(BaseModel):
 
 
 class UserOut(BaseModel):
-    id: UUID
+    id: str
     email: EmailStr
     is_verified: bool
 
