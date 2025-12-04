@@ -114,6 +114,48 @@ def create_translate_job(
     return job
 
 
+@router.post("/jobs/synthesize/create", response_model=upload_schemas.JobOut)
+def create_synthesize_job(
+    request: upload_schemas.SynthesizeRequest,
+    user_id: str = Depends(get_current_user),
+    db_session: Session = Depends(db.get_db),
+):
+    """Create a synthesis job from a translation output."""
+    # Get the translation job to verify it exists and get its output file
+    translation_job = db_session.query(Job).filter(
+        Job.id == request.job_id,
+        Job.user_id == user_id,
+        Job.job_type == "translate"
+    ).first()
+    
+    if not translation_job:
+        raise HTTPException(status_code=404, detail="Translation job not found")
+    
+    if translation_job.status != JobStatus.COMPLETED:
+        raise HTTPException(status_code=400, detail="Translation job must be completed first")
+    
+    if not translation_job.output_file:
+        raise HTTPException(status_code=400, detail="Translation job has no output file")
+    
+    # Create synthesis job
+    job = Job(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        job_type="synthesize",
+        input_file=translation_job.output_file,  # Use translation output as input
+        status=JobStatus.PENDING,
+        job_metadata=json.dumps({
+            "voice_id": request.voice_id,
+            "speed": request.speed,
+            "from_job_id": request.job_id
+        }),
+    )
+    db_session.add(job)
+    db_session.commit()
+    db_session.refresh(job)
+    return job
+
+
 @router.post("/jobs/transcribe", response_model=upload_schemas.JobOut)
 def create_transcribe_job(
     request: upload_schemas.TranscribeRequest,
@@ -236,8 +278,21 @@ def process_job(
                 raise HTTPException(status_code=500, detail="Translation processing failed")
         
         elif job.job_type == "synthesize":
-            # TODO: Implement synthesis worker
-            raise HTTPException(status_code=501, detail="Synthesis not yet implemented")
+            logger.info(f"Processing synthesis job {job_id}")
+            metadata = json.loads(job.job_metadata) if job.job_metadata else {}
+            language = metadata.get("language", "en")
+            voice_id = metadata.get("voice_id", "default")
+            speed = metadata.get("speed", 1.0)
+            
+            success = workers.synthesize_audio(
+                session=db_session,
+                job_id=job_id,
+                input_file_path=input_file_path,
+                language=language
+            )
+            
+            if not success:
+                raise HTTPException(status_code=500, detail="Synthesis processing failed")
         
         else:
             raise HTTPException(status_code=400, detail=f"Unknown job type: {job.job_type}")
