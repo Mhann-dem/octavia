@@ -57,33 +57,3 @@ class SynthesizeRequest(BaseModel):
     job_id: str
     voice_id: Optional[str] = "default"
     speed: Optional[float] = 1.0
-
-
-class VideoMetadata(BaseModel):
-    """Video file metadata."""
-    duration_seconds: float
-    width: int
-    height: int
-    fps: float
-    codec_name: str
-    has_audio: bool
-    audio_codec: Optional[str] = None
-    bit_rate: str
-
-
-class VideoUploadResponse(BaseModel):
-    """Video file upload response."""
-    file_id: str
-    filename: str
-    storage_path: str
-    size_bytes: int
-    metadata: VideoMetadata
-
-
-class VideoTranslateRequest(BaseModel):
-    """Request to translate a video."""
-    video_file_id: str
-    source_language: str = "en"
-    target_language: str = "es"
-    voice_id: Optional[str] = None  # Optional cloned voice to use
-
