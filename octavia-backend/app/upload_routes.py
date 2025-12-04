@@ -1,14 +1,18 @@
 """Upload and job management endpoints."""
 import uuid
 import json
+import logging
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, Header
 from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Optional
+from pathlib import Path
 
-from . import db, models, security, upload_schemas
+from . import db, models, security, upload_schemas, workers
 from .storage import save_upload, delete_file
 from .job_model import Job, JobStatus
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["uploads"])
 
@@ -68,7 +72,46 @@ async def upload_file(
     )
 
 
-@router.post("/jobs/transcribe", response_model=upload_schemas.JobOut)
+@router.post("/jobs/translate", response_model=upload_schemas.JobOut)
+def create_translate_job(
+    request: upload_schemas.TranslateRequest,
+    user_id: str = Depends(get_current_user),
+    db_session: Session = Depends(db.get_db),
+):
+    """Create a translation job from a transcription output."""
+    # Get the transcription job to verify it exists and get its output file
+    transcription_job = db_session.query(Job).filter(
+        Job.id == request.job_id,
+        Job.user_id == user_id,
+        Job.job_type == "transcribe"
+    ).first()
+    
+    if not transcription_job:
+        raise HTTPException(status_code=404, detail="Transcription job not found")
+    
+    if transcription_job.status != JobStatus.COMPLETED:
+        raise HTTPException(status_code=400, detail="Transcription job must be completed first")
+    
+    if not transcription_job.output_file:
+        raise HTTPException(status_code=400, detail="Transcription job has no output file")
+    
+    # Create translation job
+    job = Job(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        job_type="translate",
+        input_file=transcription_job.output_file,  # Use transcription output as input
+        status=JobStatus.PENDING,
+        job_metadata=json.dumps({
+            "source_language": request.source_language,
+            "target_language": request.target_language,
+            "from_job_id": request.job_id
+        }),
+    )
+    db_session.add(job)
+    db_session.commit()
+    db_session.refresh(job)
+    return job
 def create_transcribe_job(
     request: upload_schemas.TranscribeRequest,
     user_id: str = Depends(get_current_user),
@@ -79,9 +122,9 @@ def create_transcribe_job(
         id=str(uuid.uuid4()),
         user_id=user_id,
         job_type="transcribe",
-        input_file=request.file_id,
+        input_file=request.storage_path,  # Store full path
         status=JobStatus.PENDING,
-        metadata=json.dumps({"language": request.language}),
+        job_metadata=json.dumps({"language": request.language}),
     )
     db_session.add(job)
     db_session.commit()
@@ -100,6 +143,114 @@ def get_job(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+
+@router.post("/jobs/{job_id}/process", response_model=upload_schemas.JobOut)
+def process_job(
+    job_id: str,
+    user_id: str = Depends(get_current_user),
+    db_session: Session = Depends(db.get_db),
+):
+    """
+    Process a job (transcribe, translate, or synthesize).
+    Runs synchronously for now.
+    """
+    job = db_session.query(Job).filter(Job.id == job_id, Job.user_id == user_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    if job.status not in (JobStatus.PENDING, JobStatus.FAILED):
+        raise HTTPException(status_code=400, detail=f"Cannot process job with status {job.status}")
+    
+    try:
+        input_file_path = job.input_file  # Storage path from job
+
+        # Try multiple resolution strategies for the stored path and log attempts.
+        candidates = []
+        # 1) As-is
+        candidates.append(Path(input_file_path))
+        # 2) Relative to cwd
+        candidates.append(Path.cwd() / input_file_path)
+        # 3) Under cwd/uploads/<input_file_path>
+        candidates.append(Path.cwd() / 'uploads' / input_file_path)
+        # 4) If input already begins with 'uploads/', join directly
+        if str(input_file_path).replace('\\', '/').startswith('uploads/'):
+            candidates.append(Path.cwd() / Path(input_file_path.replace('/', '\\')))
+        
+        resolved_path = None
+        for cand in candidates:
+            try_path = cand if isinstance(cand, Path) else Path(cand)
+            logger.debug(f"Job {job_id}: checking path candidate: {try_path}")
+            if try_path.exists():
+                resolved_path = try_path
+                break
+        
+        if resolved_path is None:
+            # Provide diagnostic message listing candidates
+            cand_list = ", ".join([str(c) for c in candidates])
+            logger.error(f"Job {job_id}: none of the path candidates exist: {cand_list}")
+            raise HTTPException(status_code=400, detail=f"Input file not found: {input_file_path}")
+
+        input_file_path = str(resolved_path)
+        logger.info(f"Job {job_id}: resolved input file path: {input_file_path}")
+
+        
+        # Process based on job type
+        if job.job_type == "transcribe":
+            logger.info(f"Processing transcription job {job_id} from {input_file_path}")
+            metadata = json.loads(job.job_metadata) if job.job_metadata else {}
+            language = metadata.get("language")
+            if language == "auto":
+                language = None
+            model_size = metadata.get("model_size", "base")
+            
+            success = workers.transcribe_audio(
+                session=db_session,
+                job_id=job_id,
+                input_file_path=input_file_path,
+                language=language,
+                model_size=model_size
+            )
+            
+            if not success:
+                raise HTTPException(status_code=500, detail="Transcription processing failed")
+        
+        elif job.job_type == "translate":
+            logger.info(f"Processing translation job {job_id}")
+            metadata = json.loads(job.job_metadata) if job.job_metadata else {}
+            source_lang = metadata.get("source_language", "en")
+            target_lang = metadata.get("target_language", "es")
+            
+            success = workers.translate_from_transcription(
+                session=db_session,
+                job_id=job_id,
+                transcription_file=input_file_path,
+                source_lang=source_lang,
+                target_lang=target_lang
+            )
+            
+            if not success:
+                raise HTTPException(status_code=500, detail="Translation processing failed")
+        
+        elif job.job_type == "synthesize":
+            # TODO: Implement synthesis worker
+            raise HTTPException(status_code=501, detail="Synthesis not yet implemented")
+        
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown job type: {job.job_type}")
+        
+        # Refresh job to get updated status and output_file
+        db_session.refresh(job)
+        return job
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing job {job_id}: {str(e)}", exc_info=True)
+        job.status = JobStatus.FAILED
+        job.error_message = str(e)
+        db_session.commit()
+        raise HTTPException(status_code=500, detail=f"Error processing job: {str(e)}")
 
 
 @router.get("/jobs", response_model=list[upload_schemas.JobOut])

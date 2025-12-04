@@ -40,14 +40,15 @@ class UploadResponse(BaseModel):
 class TranscribeRequest(BaseModel):
     """Request to transcribe audio/video."""
     file_id: str
+    storage_path: str
     language: Optional[str] = "auto"  # auto-detect or specific language code
 
 
 class TranslateRequest(BaseModel):
-    """Request to translate text."""
-    job_id: str
-    source_language: str
-    target_language: str
+    """Request to translate transcribed text."""
+    job_id: str  # ID of the transcription job whose output we translate
+    source_language: str = "en"
+    target_language: str = "es"
 
 
 class SynthesizeRequest(BaseModel):
