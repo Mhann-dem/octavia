@@ -72,7 +72,7 @@ async def upload_file(
     )
 
 
-@router.post("/jobs/translate", response_model=upload_schemas.JobOut)
+@router.post("/jobs/translate/create", response_model=upload_schemas.JobOut)
 def create_translate_job(
     request: upload_schemas.TranslateRequest,
     user_id: str = Depends(get_current_user),
@@ -112,6 +112,9 @@ def create_translate_job(
     db_session.commit()
     db_session.refresh(job)
     return job
+
+
+@router.post("/jobs/transcribe", response_model=upload_schemas.JobOut)
 def create_transcribe_job(
     request: upload_schemas.TranscribeRequest,
     user_id: str = Depends(get_current_user),

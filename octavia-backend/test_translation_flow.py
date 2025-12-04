@@ -4,8 +4,9 @@ import json
 import time
 from pathlib import Path
 
-BASE_URL = "http://localhost:8001"
-TEST_EMAIL = "translator@example.com"
+BASE_URL = "http://localhost:8002"
+import uuid
+TEST_EMAIL = f"translator+{uuid.uuid4().hex[:8]}@example.com"
 TEST_PASSWORD = "TestPass123!"
 TEST_AUDIO_FILE = "test_audio.wav"
 
@@ -17,7 +18,7 @@ def test_step(step_num, description, condition, details=""):
     """Log test result"""
     global tests_run, tests_passed
     tests_run += 1
-    status = "✓ PASS" if condition else "✗ FAIL"
+    status = "[PASS]" if condition else "[FAIL]"
     print(f"\n[Step {step_num}] {status}: {description}")
     if details:
         print(f"    Details: {details}")
@@ -26,7 +27,7 @@ def test_step(step_num, description, condition, details=""):
     return condition
 
 print("=" * 70)
-print("TEST: TRANSLATION WORKFLOW (Upload → Transcribe → Translate)")
+print("TEST: TRANSLATION WORKFLOW (Upload -> Transcribe -> Translate)")
 print("=" * 70)
 
 # Step 1: Signup
@@ -40,10 +41,21 @@ test_step(1, "User signup",
     f"Status {signup_response.status_code}")
 
 # Step 2: Verify email
-verify_response = requests.get(f"{BASE_URL}/verify?email={TEST_EMAIL}")
+signup_data = signup_response.json() if signup_response.status_code == 200 else {}
+verify_url = signup_data.get("verify_url")
+from urllib.parse import urlparse, parse_qs
+token = None
+if verify_url:
+    parsed = urlparse(verify_url)
+    token = parse_qs(parsed.query).get("token", [None])[0]
+
+verify_response = None
+if token:
+    verify_response = requests.get(f"{BASE_URL}/verify?token={token}")
+
 test_step(2, "Email verification",
-    verify_response.status_code == 200,
-    f"Status {verify_response.status_code}")
+    verify_response is not None and verify_response.status_code == 200,
+    f"Status {verify_response.status_code if verify_response is not None else 'no response'}")
 
 # Step 3: Login
 login_response = requests.post(
@@ -66,8 +78,8 @@ print("\n[Phase 2] File Upload & Transcription")
 if Path(TEST_AUDIO_FILE).exists():
     with open(TEST_AUDIO_FILE, "rb") as f:
         upload_response = requests.post(
-            f"{BASE_URL}/api/v1/upload",
-            files={"file": f},
+            f"{BASE_URL}/api/v1/upload?file_type=audio",
+            files={"file": ("test_audio.wav", f, "audio/wav")},
             headers=headers
         )
     test_step(4, "Audio file upload",
@@ -137,7 +149,7 @@ if not transcribe_output:
 # Step 11: Create translation job
 print("\n[Phase 3] Translation")
 translate_response = requests.post(
-    f"{BASE_URL}/api/v1/jobs/translate",
+    f"{BASE_URL}/api/v1/jobs/translate/create",
     json={
         "job_id": transcribe_job_id,
         "source_language": "en",
@@ -145,6 +157,8 @@ translate_response = requests.post(
     },
     headers=headers
 )
+if translate_response.status_code != 200:
+    print("   Translate response body:", translate_response.text)
 test_step(11, "Create translation job",
     translate_response.status_code == 200,
     f"Status {translate_response.status_code}")
@@ -170,6 +184,7 @@ test_step(13, "Process translation job",
     f"Status {process_translate_response.status_code}")
 
 translate_result = process_translate_response.json() if process_translate_response.status_code == 200 else {}
+print(f"\n    Process response keys: {list(translate_result.keys())}")
 translate_status = translate_result.get("status")
 translate_output = translate_result.get("output_file")
 test_step(14, "Translation job completed",
@@ -193,6 +208,7 @@ if translate_job_id:
     if get_translate_response.status_code == 200:
         job_details = get_translate_response.json()
         metadata = job_details.get("job_metadata")
+        print(f"\n    Full job response: {json.dumps(job_details, indent=2, default=str)}")
         test_step(17, "Translation metadata stored",
             metadata is not None,
             f"Metadata: {metadata[:100] if metadata else 'None'}...")
@@ -218,8 +234,8 @@ print(f"TEST SUMMARY: {tests_passed}/{tests_run} tests passed")
 print("=" * 70)
 
 if tests_passed == tests_run:
-    print("✓ ALL TRANSLATION WORKFLOW TESTS PASSED")
+    print("[ALL TESTS PASSED]")
 else:
-    print(f"✗ {tests_run - tests_passed} test(s) failed")
+    print(f"[FAILED] {tests_run - tests_passed} test(s) failed")
 
 exit(0 if tests_passed == tests_run else 1)
