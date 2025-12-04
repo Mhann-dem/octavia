@@ -1,14 +1,11 @@
 """
 Background worker functions for media processing tasks.
-Handles transcription, translation, synthesis, and video operations.
+Handles transcription, translation, and synthesis operations.
 """
 import json
 import logging
-import subprocess
-import uuid
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
 import whisper
 from sqlalchemy.orm import Session
 from .job_model import Job, JobStatus
@@ -50,98 +47,6 @@ def load_audio_without_ffmpeg(audio_path: str, sr: int = 16000):
     except Exception as e:
         logger.warning(f"Failed to load audio with soundfile: {e}")
         return None
-
-
-def extract_audio_from_video(
-    session: Session,
-    job_id: str,
-    video_path: str,
-) -> bool:
-    """
-    Extract audio from video file using FFmpeg.
-    
-    Saves audio as WAV in the uploads directory.
-    Updates job status and output_file path.
-    
-    Args:
-        session: SQLAlchemy database session
-        job_id: Job ID
-        video_path: Path to video file
-    
-    Returns:
-        True if extraction succeeded, False otherwise
-    """
-    try:
-        job = session.query(Job).filter(Job.id == job_id).first()
-        if not job:
-            logger.error(f"Job {job_id} not found")
-            return False
-        
-        if not Path(video_path).exists():
-            logger.error(f"Video file not found: {video_path}")
-            job.status = JobStatus.FAILED
-            job.updated_at = datetime.utcnow()
-            session.commit()
-            return False
-        
-        # Generate output filename
-        output_filename = f"{job_id}_extracted_audio.wav"
-        output_dir = Path(video_path).parent
-        output_path = output_dir / output_filename
-        
-        # Use FFmpeg to extract audio
-        cmd = [
-            "ffmpeg",
-            "-i", video_path,
-            "-q:a", "9",  # Highest quality
-            "-y",  # Overwrite output file
-            str(output_path)
-        ]
-        
-        logger.info(f"Extracting audio from {video_path} → {output_path}")
-        
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=300  # 5 minute timeout for audio extraction
-        )
-        
-        if result.returncode != 0:
-            logger.error(f"FFmpeg extraction failed: {result.stderr}")
-            job.status = JobStatus.FAILED
-            job.updated_at = datetime.utcnow()
-            session.commit()
-            return False
-        
-        if not output_path.exists():
-            logger.error(f"Audio file was not created: {output_path}")
-            job.status = JobStatus.FAILED
-            job.updated_at = datetime.utcnow()
-            session.commit()
-            return False
-        
-        # Update job
-        job.output_file = str(output_path)
-        job.status = JobStatus.COMPLETED
-        job.updated_at = datetime.utcnow()
-        session.commit()
-        
-        logger.info(f"Successfully extracted audio to {output_path}")
-        return True
-        
-    except subprocess.TimeoutExpired:
-        logger.error(f"Audio extraction timeout for {video_path}")
-        job.status = JobStatus.FAILED
-        job.updated_at = datetime.utcnow()
-        session.commit()
-        return False
-    except Exception as e:
-        logger.error(f"Error extracting audio: {e}", exc_info=True)
-        job.status = JobStatus.FAILED
-        job.updated_at = datetime.utcnow()
-        session.commit()
-        return False
 
 
 def transcribe_audio(
