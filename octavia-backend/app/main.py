@@ -4,13 +4,15 @@ from sqlalchemy.orm import Session
 from . import db, models, schemas, security
 from .emailer import send_verification_email
 from .upload_routes import router as upload_router
+from .video_routes import router as video_router
 
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Octavia Backend")
 
-# Include upload routes
+# Include routers
 app.include_router(upload_router)
+app.include_router(video_router)
 
 frontend = os.environ.get("NEXT_PUBLIC_APP_URL", "http://localhost:3000")
 
