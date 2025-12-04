@@ -22,6 +22,7 @@ class JobOut(BaseModel):
     input_file: str
     output_file: Optional[str] = None
     error_message: Optional[str] = None
+    job_metadata: Optional[str] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
 
