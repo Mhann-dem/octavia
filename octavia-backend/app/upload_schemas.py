@@ -57,3 +57,19 @@ class SynthesizeRequest(BaseModel):
     job_id: str
     voice_id: Optional[str] = "default"
     speed: Optional[float] = 1.0
+
+
+class EstimateRequest(BaseModel):
+    """Request to estimate credit cost."""
+    job_type: str
+    input_file_path: str
+    duration_override: Optional[float] = None
+
+
+class CreditEstimate(BaseModel):
+    """Credit cost estimate response."""
+    job_type: str
+    estimated_credits: int
+    current_balance: int
+    sufficient_balance: bool
+
