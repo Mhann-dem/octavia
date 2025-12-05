@@ -15,7 +15,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from app.main import app
-from app import db
+from app.core.database import Base, engine
 
 # Set test environment variables for Polar
 os.environ["POLAR_PRODUCT_ID"] = "test-product-id"
@@ -34,15 +34,15 @@ def client():
 @pytest.fixture(autouse=True)
 def reset_db():
     """Reset database tables before each test."""
-    db.Base.metadata.drop_all(bind=db.engine)
-    db.Base.metadata.create_all(bind=db.engine)
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
     yield
 
 
 @pytest.fixture
 def mock_polar_client():
     """Mock the Polar client to avoid real API calls."""
-    with patch('app.billing_routes.get_polar_client') as mock_get_client:
+    with patch('app.routes.billing.get_polar_client') as mock_get_client:
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
         

@@ -1,6 +1,6 @@
 """File upload models."""
 import uuid
-from sqlalchemy import Column, String, DateTime
+from sqlalchemy import Column, String, Integer, DateTime
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -14,5 +14,5 @@ class FileUpload(Base):
     original_filename = Column(String, nullable=False)
     storage_path = Column(String, nullable=False)
     file_type = Column(String, nullable=False)  # 'video', 'audio', 'image'
-    file_size = Column(int, nullable=False)  # In bytes
+    file_size = Column(Integer, nullable=False)  # In bytes
     created_at = Column(DateTime(timezone=True), server_default=func.now())
