@@ -190,6 +190,11 @@ def get_job(
     return job
 
 
+"""
+Updated process_job endpoint to handle video translation jobs.
+Add this to the existing upload_routes.py process_job function.
+"""
+
 @router.post("/jobs/{job_id}/process", response_model=upload_schemas.JobOut)
 def process_job(
     job_id: str,
@@ -197,7 +202,7 @@ def process_job(
     db_session: Session = Depends(db.get_db),
 ):
     """
-    Process a job (transcribe, translate, or synthesize).
+    Process a job (transcribe, translate, synthesize, or video_translate).
     Runs synchronously for now.
     """
     job = db_session.query(Job).filter(Job.id == job_id, Job.user_id == user_id).first()
@@ -208,17 +213,13 @@ def process_job(
         raise HTTPException(status_code=400, detail=f"Cannot process job with status {job.status}")
     
     try:
-        input_file_path = job.input_file  # Storage path from job
-
-        # Try multiple resolution strategies for the stored path and log attempts.
+        input_file_path = job.input_file
+        
+        # Resolve file path with multiple strategies
         candidates = []
-        # 1) As-is
         candidates.append(Path(input_file_path))
-        # 2) Relative to cwd
         candidates.append(Path.cwd() / input_file_path)
-        # 3) Under cwd/uploads/<input_file_path>
         candidates.append(Path.cwd() / 'uploads' / input_file_path)
-        # 4) If input already begins with 'uploads/', join directly
         if str(input_file_path).replace('\\', '/').startswith('uploads/'):
             candidates.append(Path.cwd() / Path(input_file_path.replace('/', '\\')))
         
@@ -231,14 +232,12 @@ def process_job(
                 break
         
         if resolved_path is None:
-            # Provide diagnostic message listing candidates
             cand_list = ", ".join([str(c) for c in candidates])
             logger.error(f"Job {job_id}: none of the path candidates exist: {cand_list}")
             raise HTTPException(status_code=400, detail=f"Input file not found: {input_file_path}")
 
         input_file_path = str(resolved_path)
         logger.info(f"Job {job_id}: resolved input file path: {input_file_path}")
-
         
         # Process based on job type
         if job.job_type == "transcribe":
@@ -281,8 +280,6 @@ def process_job(
             logger.info(f"Processing synthesis job {job_id}")
             metadata = json.loads(job.job_metadata) if job.job_metadata else {}
             language = metadata.get("language", "en")
-            voice_id = metadata.get("voice_id", "default")
-            speed = metadata.get("speed", 1.0)
             
             success = workers.synthesize_audio(
                 session=db_session,
@@ -293,6 +290,25 @@ def process_job(
             
             if not success:
                 raise HTTPException(status_code=500, detail="Synthesis processing failed")
+        
+        elif job.job_type == "video_translate":
+            logger.info(f"Processing video translation job {job_id}")
+            metadata = json.loads(job.job_metadata) if job.job_metadata else {}
+            source_lang = metadata.get("source_language", "auto")
+            target_lang = metadata.get("target_language", "es")
+            model_size = metadata.get("model_size", "base")
+            
+            success = workers.process_video_translation(
+                session=db_session,
+                job_id=job_id,
+                input_video_path=input_file_path,
+                source_lang=source_lang,
+                target_lang=target_lang,
+                model_size=model_size
+            )
+            
+            if not success:
+                raise HTTPException(status_code=500, detail="Video translation processing failed")
         
         else:
             raise HTTPException(status_code=400, detail=f"Unknown job type: {job.job_type}")

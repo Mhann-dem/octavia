@@ -328,6 +328,182 @@ def translate_from_transcription(
             session.commit()
         return False
 
+"""
+Add this function to app/workers.py to handle video translation jobs.
+This should be added to the existing workers.py file.
+"""
+
+def process_video_translation(
+    session: Session,
+    job_id: str,
+    input_video_path: str,
+    source_lang: str = "auto",
+    target_lang: str = "es",
+    model_size: str = "base"
+) -> bool:
+    """
+    Process a complete video translation job.
+    
+    Pipeline:
+    1. Extract audio from video
+    2. Transcribe audio to text (Whisper)
+    3. Translate text to target language (Helsinki NLP)
+    4. Synthesize new audio from translated text (pyttsx3)
+    5. Merge new audio back into video
+    
+    Args:
+        session: SQLAlchemy database session
+        job_id: Job ID to update with results
+        input_video_path: Path to input video file
+        source_lang: Source language code (or 'auto' for detection)
+        target_lang: Target language code
+        model_size: Whisper model size
+    
+    Returns:
+        bool: True if video translation succeeded, False otherwise
+    """
+    try:
+        from .video_processor import VideoProcessor, extract_audio_from_video, merge_dubbed_audio
+        
+        # Get the job record
+        job = session.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            logger.error(f"Job {job_id} not found")
+            return False
+        
+        # Update status to processing
+        job.status = JobStatus.PROCESSING
+        session.commit()
+        logger.info(f"Job {job_id}: Starting video translation pipeline")
+        
+        video_path = Path(input_video_path)
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {input_video_path}")
+        
+        # === STEP 1: Extract audio from video ===
+        logger.info(f"Job {job_id}: Step 1/5 - Extracting audio from video")
+        audio_path = extract_audio_from_video(str(video_path))
+        if not audio_path:
+            raise Exception("Failed to extract audio from video")
+        
+        logger.info(f"Job {job_id}: Audio extracted to {audio_path}")
+        
+        # === STEP 2: Transcribe audio ===
+        logger.info(f"Job {job_id}: Step 2/5 - Transcribing audio")
+        
+        # Use existing transcribe_audio function
+        transcription_success = transcribe_audio(
+            session=session,
+            job_id=f"{job_id}_transcribe",  # Temporary sub-job
+            input_file_path=audio_path,
+            language=None if source_lang == "auto" else source_lang,
+            model_size=model_size
+        )
+        
+        if not transcription_success:
+            raise Exception("Transcription failed")
+        
+        # Find the transcription output file
+        transcription_path = Path(audio_path).parent / f"{Path(audio_path).stem}_transcript.json"
+        if not transcription_path.exists():
+            raise Exception(f"Transcription output not found at {transcription_path}")
+        
+        logger.info(f"Job {job_id}: Transcription complete: {transcription_path}")
+        
+        # Load transcription to get detected language
+        with open(transcription_path, 'r', encoding='utf-8') as f:
+            transcription_data = json.load(f)
+        
+        detected_language = transcription_data.get('language', source_lang)
+        logger.info(f"Job {job_id}: Detected language: {detected_language}")
+        
+        # === STEP 3: Translate text ===
+        logger.info(f"Job {job_id}: Step 3/5 - Translating from {detected_language} to {target_lang}")
+        
+        # Use existing translate_from_transcription function
+        translation_success = translate_from_transcription(
+            session=session,
+            job_id=f"{job_id}_translate",  # Temporary sub-job
+            transcription_file=str(transcription_path),
+            source_lang=detected_language,
+            target_lang=target_lang
+        )
+        
+        if not translation_success:
+            raise Exception("Translation failed")
+        
+        # Find the translation output file
+        translation_path = transcription_path.parent / f"{transcription_path.stem}_translated.json"
+        if not translation_path.exists():
+            raise Exception(f"Translation output not found at {translation_path}")
+        
+        logger.info(f"Job {job_id}: Translation complete: {translation_path}")
+        
+        # === STEP 4: Synthesize audio ===
+        logger.info(f"Job {job_id}: Step 4/5 - Synthesizing dubbed audio")
+        
+        # Use existing synthesize_audio function
+        synthesis_success = synthesize_audio(
+            session=session,
+            job_id=f"{job_id}_synthesize",  # Temporary sub-job
+            input_file_path=str(translation_path),
+            language=target_lang
+        )
+        
+        if not synthesis_success:
+            raise Exception("Audio synthesis failed")
+        
+        # Find the synthesized audio file
+        dubbed_audio_path = translation_path.parent / f"{translation_path.stem}_audio.wav"
+        if not dubbed_audio_path.exists():
+            raise Exception(f"Synthesized audio not found at {dubbed_audio_path}")
+        
+        logger.info(f"Job {job_id}: Audio synthesis complete: {dubbed_audio_path}")
+        
+        # === STEP 5: Merge dubbed audio back into video ===
+        logger.info(f"Job {job_id}: Step 5/5 - Merging dubbed audio with video")
+        
+        output_video_path = merge_dubbed_audio(
+            video_path=str(video_path),
+            audio_path=str(dubbed_audio_path),
+            output_path=None  # Auto-generate output name
+        )
+        
+        if not output_video_path:
+            raise Exception("Failed to merge audio with video")
+        
+        logger.info(f"Job {job_id}: Video translation complete: {output_video_path}")
+        
+        # === Update job with final results ===
+        job.status = JobStatus.COMPLETED
+        job.output_file = output_video_path
+        job.job_metadata = json.dumps({
+            "source_language": source_lang,
+            "target_language": target_lang,
+            "detected_language": detected_language,
+            "model_size": model_size,
+            "intermediate_files": {
+                "extracted_audio": audio_path,
+                "transcription": str(transcription_path),
+                "translation": str(translation_path),
+                "dubbed_audio": str(dubbed_audio_path)
+            },
+            "output_video": output_video_path,
+            "output_size_bytes": Path(output_video_path).stat().st_size
+        })
+        session.commit()
+        
+        logger.info(f"Job {job_id}: Video translation job completed successfully")
+        return True
+    
+    except Exception as e:
+        logger.error(f"Job {job_id}: Video translation failed with error: {str(e)}", exc_info=True)
+        job = session.query(Job).filter(Job.id == job_id).first()
+        if job:
+            job.status = JobStatus.FAILED
+            job.error_message = f"Video translation error: {str(e)}"
+            session.commit()
+        return False
 
 def synthesize_audio(
     session: Session,
