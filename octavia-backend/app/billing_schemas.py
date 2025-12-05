@@ -1,0 +1,97 @@
+"""Billing schemas for API requests/responses."""
+from pydantic import BaseModel, Field
+from typing import Optional
+from enum import Enum
+
+
+class CreditPackageType(str, Enum):
+    """Available credit packages."""
+    STARTER = "starter"      # 100 credits - $5
+    BASIC = "basic"          # 250 credits - $10
+    PROFESSIONAL = "pro"     # 500 credits - $18
+    ENTERPRISE = "enterprise"  # 1000 credits - $30
+
+
+class PricingTierOut(BaseModel):
+    """Pricing tier information."""
+    id: str
+    package: CreditPackageType
+    credits: int
+    price_usd: float
+    description: Optional[str] = None
+    is_active: bool = True
+    
+    class Config:
+        from_attributes = True
+
+
+class PricingListOut(BaseModel):
+    """List of available pricing tiers."""
+    tiers: list[PricingTierOut]
+
+
+class CheckoutRequest(BaseModel):
+    """Request to create a checkout session."""
+    package: CreditPackageType
+    success_url: Optional[str] = None
+    cancel_url: Optional[str] = None
+
+
+class CheckoutResponse(BaseModel):
+    """Response with checkout URL."""
+    checkout_url: str
+    order_id: str
+    credits: int
+    amount_usd: float
+    expires_at: Optional[str] = None
+
+
+class PaymentConfirmation(BaseModel):
+    """Payment confirmation details."""
+    order_id: str
+    status: str
+    credits_added: int
+    new_balance: int
+    timestamp: str
+
+
+class CreditBalance(BaseModel):
+    """User's current credit balance."""
+    user_id: str
+    balance: int
+    last_updated: str
+
+
+class CreditTransactionOut(BaseModel):
+    """Credit transaction record."""
+    id: str
+    transaction_type: str  # 'purchase', 'deduction', 'refund'
+    amount: int
+    reason: Optional[str] = None
+    balance_before: int
+    balance_after: int
+    created_at: str
+    
+    class Config:
+        from_attributes = True
+
+
+class TransactionHistoryOut(BaseModel):
+    """User's transaction history."""
+    transactions: list[CreditTransactionOut]
+    total_purchased: int
+    total_used: int
+    current_balance: int
+
+
+class WebhookSignatureRequest(BaseModel):
+    """Request body for webhook signature verification."""
+    payload: str
+    signature: str
+
+
+class WebhookPayload(BaseModel):
+    """Polar webhook payload."""
+    type: str
+    data: dict
+    timestamp: str
