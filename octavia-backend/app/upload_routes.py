@@ -11,6 +11,8 @@ from pathlib import Path
 from . import db, models, security, upload_schemas, workers
 from .storage import save_upload, delete_file
 from .job_model import Job, JobStatus
+from .credit_calculator import CreditCalculator
+from .billing_routes import deduct_credits
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +205,7 @@ def process_job(
 ):
     """
     Process a job (transcribe, translate, synthesize, or video_translate).
+    Validates credits before processing and deducts them on completion.
     Runs synchronously for now.
     """
     job = db_session.query(Job).filter(Job.id == job_id, Job.user_id == user_id).first()
@@ -211,6 +214,11 @@ def process_job(
     
     if job.status not in (JobStatus.PENDING, JobStatus.FAILED):
         raise HTTPException(status_code=400, detail=f"Cannot process job with status {job.status}")
+    
+    # Get user for credit validation
+    user = db_session.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
     
     try:
         input_file_path = job.input_file
@@ -238,6 +246,26 @@ def process_job(
 
         input_file_path = str(resolved_path)
         logger.info(f"Job {job_id}: resolved input file path: {input_file_path}")
+        
+        # STEP 1: Calculate credit cost
+        calculator = CreditCalculator()
+        credit_cost = calculator.calculate_credits(
+            job_type=job.job_type,
+            input_file_path=input_file_path
+        )
+        
+        logger.info(f"Job {job_id}: Estimated cost: {credit_cost} credits")
+        
+        # STEP 2: Validate sufficient credits
+        if user.credits < credit_cost:
+            error_msg = f"Insufficient credits. Required: {credit_cost}, Available: {user.credits}"
+            logger.warning(f"Job {job_id}: {error_msg}")
+            raise HTTPException(
+                status_code=402,  # Payment Required
+                detail=error_msg
+            )
+        
+        logger.info(f"Job {job_id}: User has sufficient credits ({user.credits} >= {credit_cost})")
         
         # Process based on job type
         if job.job_type == "transcribe":
@@ -314,6 +342,22 @@ def process_job(
         else:
             raise HTTPException(status_code=400, detail=f"Unknown job type: {job.job_type}")
         
+        # STEP 3: Deduct credits on successful completion
+        if job.status == JobStatus.COMPLETED:
+            logger.info(f"Job {job_id}: Deducting {credit_cost} credits")
+            success = deduct_credits(
+                session=db_session,
+                user_id=user_id,
+                job_id=job_id,
+                job_type=job.job_type,
+                credits=credit_cost,
+                reason=f"{job.job_type} job completed"
+            )
+            
+            if not success:
+                logger.error(f"Job {job_id}: Failed to deduct credits, but job completed")
+                # Don't fail the job if credit deduction fails - job is already done
+        
         # Refresh job to get updated status and output_file
         db_session.refresh(job)
         return job
@@ -326,6 +370,39 @@ def process_job(
         job.error_message = str(e)
         db_session.commit()
         raise HTTPException(status_code=500, detail=f"Error processing job: {str(e)}")
+
+
+@router.post("/estimate", response_model=upload_schemas.CreditEstimate)
+def estimate_credits(
+    request: upload_schemas.EstimateRequest,
+    user_id: str = Depends(get_current_user),
+    db_session: Session = Depends(db.get_db),
+):
+    """Estimate credit cost for a job before processing."""
+    try:
+        credit_cost = CreditCalculator.calculate_credits(
+            job_type=request.job_type,
+            input_file_path=request.input_file_path,
+            duration_override=request.duration_override,
+        )
+        
+        # Get user current balance
+        user = db_session.query(models.User).filter(models.User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        current_balance = user.credits if user.credits is not None else 0
+        
+        return upload_schemas.CreditEstimate(
+            job_type=request.job_type,
+            estimated_credits=credit_cost,
+            current_balance=current_balance,
+            sufficient_balance=current_balance >= credit_cost,
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=400, detail=f"File not found: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error estimating credits: {str(e)}")
 
 
 @router.get("/jobs", response_model=list[upload_schemas.JobOut])
