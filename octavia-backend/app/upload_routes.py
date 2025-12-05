@@ -298,13 +298,14 @@ def process_job(
             target_lang = metadata.get("target_language", "es")
             model_size = metadata.get("model_size", "base")
             
-            success = workers.process_video_translation(
+            success = workers.video_translate_pipeline(
                 session=db_session,
                 job_id=job_id,
-                input_video_path=input_file_path,
-                source_lang=source_lang,
-                target_lang=target_lang,
-                model_size=model_size
+                input_file_path=input_file_path,
+                source_language=source_lang,
+                target_language=target_lang,
+                model_size=model_size,
+                enable_dubbing=True
             )
             
             if not success:

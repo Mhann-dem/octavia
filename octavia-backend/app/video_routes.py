@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 from typing import Optional
 from pathlib import Path
+from pydantic import BaseModel
 
-from . import db, security, upload_schemas
+from . import db, security
 from .job_model import Job, JobStatus
 from .video_processor import VideoProcessor
 
@@ -33,7 +34,7 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> str:
     return user_id
 
 
-class VideoTranslateRequest(upload_schemas.BaseModel):
+class VideoTranslateRequest(BaseModel):
     """Request to translate a video."""
     storage_path: str
     source_language: str = "auto"
@@ -41,7 +42,7 @@ class VideoTranslateRequest(upload_schemas.BaseModel):
     model_size: str = "base"  # Whisper model size
 
 
-class VideoTranslateResponse(upload_schemas.BaseModel):
+class VideoTranslateResponse(BaseModel):
     """Response from video translation job creation."""
     job_id: str
     status: str
