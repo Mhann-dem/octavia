@@ -2,6 +2,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 from enum import Enum
+from datetime import datetime
 
 
 class CreditPackageType(str, Enum):
@@ -41,6 +42,7 @@ class CheckoutResponse(BaseModel):
     """Response with checkout URL."""
     checkout_url: str
     order_id: str
+    polar_order_id: Optional[str] = None  # For webhook matching in tests
     credits: int
     amount_usd: float
     expires_at: Optional[str] = None
@@ -70,7 +72,7 @@ class CreditTransactionOut(BaseModel):
     reason: Optional[str] = None
     balance_before: int
     balance_after: int
-    created_at: str
+    created_at: datetime
     
     class Config:
         from_attributes = True

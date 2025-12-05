@@ -70,8 +70,10 @@ def get_pricing_tiers(db_session: Session = Depends(db.get_db)):
                     price_usd=tier_data["price_usd"],
                     is_active=True
                 )
+                db_session.add(tier)
                 tiers.append(tier)
             
+            db_session.commit()
             logger.info("Initialized default pricing tiers")
         
         tier_list = [PricingTierOut.model_validate(tier) for tier in tiers]
@@ -189,6 +191,7 @@ def create_checkout_session(
         return CheckoutResponse(
             checkout_url=checkout_url,
             order_id=payment.id,
+            polar_order_id=payment.polar_order_id,
             credits=tier.credits,
             amount_usd=tier.price_usd,
             expires_at=None
