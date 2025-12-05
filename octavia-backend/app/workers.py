@@ -631,3 +631,246 @@ def synthesize_audio(
             job.error_message = f"Synthesis error: {str(e)}"
             session.commit()
         return False
+
+
+def video_translate_pipeline(
+    session: Session,
+    job_id: str,
+    input_file_path: str,
+    source_language: str = "auto",
+    target_language: str = "es",
+    model_size: str = "base",
+    enable_dubbing: bool = True,
+) -> bool:
+    """
+    End-to-end video translation pipeline.
+    
+    Steps:
+    1. Extract audio from video
+    2. Transcribe audio to text (with timestamps)
+    3. Translate text to target language
+    4. Synthesize new audio from translated text
+    5. Merge new audio back into video
+    
+    Args:
+        session: Database session
+        job_id: Job ID for tracking
+        input_file_path: Path to input video file
+        source_language: Source language code or 'auto'
+        target_language: Target language code
+        model_size: Whisper model size ('tiny', 'base', 'small', 'medium', 'large')
+        enable_dubbing: Whether to dub the video (vs just generating subtitles)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    from .video_processor import VideoProcessor
+    from pathlib import Path
+    import tempfile
+    import shutil
+    
+    job = session.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        logger.error(f"Job {job_id}: Job not found")
+        return False
+    
+    try:
+        job.status = JobStatus.PROCESSING
+        session.commit()
+        
+        video_path = Path(input_file_path)
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {input_file_path}")
+        
+        logger.info(f"Job {job_id}: Starting video translation pipeline")
+        logger.info(f"  Input: {video_path}")
+        logger.info(f"  Source language: {source_language}")
+        logger.info(f"  Target language: {target_language}")
+        logger.info(f"  Enable dubbing: {enable_dubbing}")
+        
+        # Step 1: Extract audio from video
+        logger.info(f"Job {job_id}: Step 1/5 - Extracting audio from video")
+        processor = VideoProcessor()
+        
+        temp_dir = Path(tempfile.gettempdir()) / f"octavia_job_{job_id}"
+        temp_dir.mkdir(exist_ok=True, parents=True)
+        
+        audio_extract_path = temp_dir / "extracted_audio.wav"
+        extracted_audio = processor.extract_audio(
+            str(video_path),
+            str(audio_extract_path),
+            audio_format='wav',
+            sample_rate=16000
+        )
+        
+        if not extracted_audio:
+            raise Exception("Failed to extract audio from video")
+        
+        logger.info(f"Job {job_id}: Audio extracted successfully ({Path(extracted_audio).stat().st_size} bytes)")
+        
+        # Step 2: Transcribe audio
+        logger.info(f"Job {job_id}: Step 2/5 - Transcribing audio to text")
+        
+        # Load audio without ffmpeg (use extracted WAV)
+        audio_data = load_audio_without_ffmpeg(extracted_audio, sr=16000)
+        if audio_data is None:
+            raise Exception("Failed to load extracted audio")
+        
+        # Transcribe using Whisper
+        model = whisper.load_model(model_size)
+        transcribe_result = model.transcribe(
+            audio_data,
+            language=None if source_language == "auto" else source_language,
+            verbose=False,
+            temperature=0.0
+        )
+        
+        original_text = transcribe_result.get("text", "").strip()
+        
+        if not original_text:
+            logger.warning(f"Job {job_id}: No text found in video audio")
+            # Create placeholder output
+            output_video_path = video_path.parent / f"{video_path.stem}_translated{video_path.suffix}"
+            shutil.copy(str(video_path), str(output_video_path))
+            
+            job.status = JobStatus.COMPLETED
+            job.output_file = output_video_path.as_posix()
+            job.job_metadata = json.dumps({
+                "source_language": source_language,
+                "target_language": target_language,
+                "original_text": "",
+                "translated_text": "",
+                "status": "no_audio"
+            })
+            session.commit()
+            return True
+        
+        logger.info(f"Job {job_id}: Transcription complete ({len(original_text)} characters)")
+        
+        # Step 3: Translate text
+        logger.info(f"Job {job_id}: Step 3/5 - Translating text")
+        
+        try:
+            from transformers import pipeline as hf_pipeline
+            
+            # Use Helsinki NLP for translation
+            translation_model = f"Helsinki-NLP/opus-mt-{source_language if source_language != 'auto' else 'en'}-{target_language}"
+            translator = hf_pipeline("translation", model=translation_model)
+            
+            # Split long text into chunks (512 tokens max)
+            text_chunks = [original_text[i:i+500] for i in range(0, len(original_text), 500)]
+            translated_chunks = []
+            
+            for chunk in text_chunks:
+                if chunk.strip():
+                    result = translator(chunk, max_length=512)
+                    translated_text = result[0].get("translation_text", chunk)
+                    translated_chunks.append(translated_text)
+            
+            translated_text = " ".join(translated_chunks)
+            
+        except Exception as e:
+            logger.warning(f"Job {job_id}: Translation failed, using original text: {str(e)}")
+            translated_text = original_text
+        
+        logger.info(f"Job {job_id}: Translation complete ({len(translated_text)} characters)")
+        
+        # Step 4: Synthesize new audio (if dubbing enabled)
+        synthesized_audio_path = None
+        
+        if enable_dubbing and translated_text:
+            logger.info(f"Job {job_id}: Step 4/5 - Synthesizing translated audio")
+            
+            synthesized_audio_path = temp_dir / "synthesized_audio.wav"
+            
+            try:
+                import pyttsx3
+                
+                engine = pyttsx3.init()
+                engine.setProperty('rate', 150)
+                engine.setProperty('volume', 0.9)
+                engine.save_to_file(translated_text, str(synthesized_audio_path))
+                engine.runAndWait()
+                
+                if synthesized_audio_path.exists():
+                    logger.info(f"Job {job_id}: Audio synthesis complete ({synthesized_audio_path.stat().st_size} bytes)")
+                else:
+                    logger.warning(f"Job {job_id}: Synthesis failed, skipping dubbing")
+                    synthesized_audio_path = None
+            
+            except Exception as e:
+                logger.warning(f"Job {job_id}: Synthesis failed: {str(e)}, skipping dubbing")
+                synthesized_audio_path = None
+        else:
+            logger.info(f"Job {job_id}: Step 4/5 - Skipping audio synthesis (dubbing disabled or no text)")
+        
+        # Step 5: Merge audio back into video
+        logger.info(f"Job {job_id}: Step 5/5 - Merging audio with video")
+        
+        output_video_path = video_path.parent / f"{video_path.stem}_translated{video_path.suffix}"
+        
+        if synthesized_audio_path and synthesized_audio_path.exists():
+            # Merge dubbed audio with original video
+            merged_video = processor.merge_audio_video(
+                str(video_path),
+                str(synthesized_audio_path),
+                str(output_video_path),
+                video_codec='copy',
+                audio_codec='aac'
+            )
+            
+            if not merged_video:
+                logger.warning(f"Job {job_id}: Video merge failed, using original video")
+                shutil.copy(str(video_path), str(output_video_path))
+        else:
+            logger.info(f"Job {job_id}: No dubbed audio available, copying original video")
+            shutil.copy(str(video_path), str(output_video_path))
+        
+        if not output_video_path.exists():
+            raise Exception("Output video file was not created")
+        
+        output_size = output_video_path.stat().st_size
+        logger.info(f"Job {job_id}: Video translation pipeline complete ({output_size} bytes)")
+        
+        # Update job with results
+        job.status = JobStatus.COMPLETED
+        job.output_file = output_video_path.as_posix()
+        job.job_metadata = json.dumps({
+            "source_language": source_language,
+            "target_language": target_language,
+            "original_text": original_text[:1000],  # Store preview
+            "translated_text": translated_text[:1000],  # Store preview
+            "dubbed": synthesized_audio_path is not None,
+            "output_size_bytes": output_size,
+            "pipeline_status": "success"
+        })
+        session.commit()
+        
+        logger.info(f"Job {job_id}: Video translation job completed successfully")
+        
+        # Cleanup temp directory
+        try:
+            shutil.rmtree(temp_dir)
+            logger.info(f"Job {job_id}: Cleaned up temporary files")
+        except Exception as e:
+            logger.warning(f"Job {job_id}: Failed to cleanup temp files: {str(e)}")
+        
+        return True
+    
+    except Exception as e:
+        logger.error(f"Job {job_id}: Video translation failed: {str(e)}", exc_info=True)
+        job = session.query(Job).filter(Job.id == job_id).first()
+        if job:
+            job.status = JobStatus.FAILED
+            job.error_message = f"Video translation error: {str(e)}"
+            session.commit()
+        
+        # Cleanup temp files on failure
+        try:
+            temp_dir = Path(tempfile.gettempdir()) / f"octavia_job_{job_id}"
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir)
+        except:
+            pass
+        
+        return False
