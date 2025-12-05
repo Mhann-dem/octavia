@@ -10,11 +10,19 @@ import time
 import wave
 import struct
 from unittest.mock import patch, MagicMock
+from urllib.parse import urlparse, parse_qs
 import pytest
 from starlette.testclient import TestClient
 
 from app.main import app
 from app import db
+
+# Set test environment variables for Polar
+os.environ["POLAR_PRODUCT_ID"] = "test-product-id"
+os.environ["POLAR_PRICE_ID_STARTER"] = "test-price-starter"
+os.environ["POLAR_PRICE_ID_BASIC"] = "test-price-basic"
+os.environ["POLAR_PRICE_ID_PRO"] = "test-price-pro"
+os.environ["POLAR_PRICE_ID_ENTERPRISE"] = "test-price-enterprise"
 
 
 @pytest.fixture(scope="function")
@@ -38,12 +46,24 @@ def mock_polar_client():
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
         
-        # Mock checkout creation
-        mock_client.create_checkout_session.return_value = {
-            "url": "https://checkout.polar.sh/test-checkout-url",
-            "order_id": "test-order-12345",
-            "checkout_url": "https://checkout.polar.sh/test-checkout-url"
-        }
+        # Track generated order IDs for consistent webhook testing
+        order_ids = {}
+        
+        # Mock checkout creation - generate consistent order IDs
+        def create_checkout_impl(**kwargs):
+            # Generate a unique order ID based on customer email
+            email = kwargs.get('customer_email', 'test@example.com')
+            if email not in order_ids:
+                order_ids[email] = f"polar-order-{int(time.time()*1000)}-{len(order_ids)}"
+            order_id = order_ids[email]
+            
+            return {
+                "url": "https://checkout.polar.sh/test-checkout-url",
+                "order_id": order_id,
+                "checkout_url": "https://checkout.polar.sh/test-checkout-url"
+            }
+        
+        mock_client.create_checkout_session.side_effect = create_checkout_impl
         
         # Mock webhook signature verification (always succeed in test)
         mock_client.verify_webhook_signature.return_value = True
@@ -60,6 +80,50 @@ def mock_polar_client():
         yield mock_client
 
 
+def signup_and_login(client, email: str, password: str):
+    """Helper function to signup, verify, and login a user."""
+    # Signup
+    resp = client.post("/signup", json={"email": email, "password": password})
+    if resp.status_code != 200:
+        raise RuntimeError(f"Signup failed with {resp.status_code}: {resp.text}")
+    
+    signup_data = resp.json()
+    verify_url = signup_data.get("verify_url", "")
+    
+    # Extract verify token from URL
+    try:
+        parsed = urlparse(verify_url)
+        token = parse_qs(parsed.query).get("token", [None])[0]
+    except Exception as e:
+        raise RuntimeError(f"Could not extract verify token: {e}")
+    
+    if not token:
+        raise RuntimeError("No verify token in signup response")
+    
+    # Verify email
+    resp = client.get(f"/verify?token={token}")
+    if resp.status_code != 200:
+        raise RuntimeError(f"Verify failed with {resp.status_code}: {resp.text}")
+    
+    # Login
+    resp = client.post("/login", json={"email": email, "password": password})
+    if resp.status_code != 200:
+        raise RuntimeError(f"Login failed with {resp.status_code}: {resp.text}")
+    
+    access_token = resp.json().get("access_token")
+    if not access_token:
+        raise RuntimeError("No access token in login response")
+    
+    # Fetch pricing to initialize default tiers
+    headers = {"Authorization": f"Bearer {access_token}"}
+    resp = client.get("/api/v1/billing/pricing", headers=headers)
+    if resp.status_code != 200:
+        raise RuntimeError(f"Failed to initialize pricing tiers: {resp.text}")
+    
+    return access_token
+
+
+
 class TestBillingE2E:
     """End-to-end billing flow tests."""
     
@@ -68,41 +132,24 @@ class TestBillingE2E:
         email = f"test_{int(time.time())}@example.com"
         password = "BillingTest123!"
         
-        # Signup
-        resp = client.post("/signup", json={
-            "email": email,
-            "password": password
-        })
-        assert resp.status_code == 200, f"Signup failed: {resp.text}"
-        user = resp.json()["user"]
-        user_id = user["id"]
-        assert user["email"] == email
-        
-        # Login
-        resp = client.post("/login", json={
-            "email": email,
-            "password": password
-        })
-        assert resp.status_code == 200
-        token = resp.json()["access_token"]
+        # Signup, verify, and login
+        token = signup_and_login(client, email, password)
+        headers = {"Authorization": f"Bearer {token}"}
         
         # Check initial balance
-        headers = {"Authorization": f"Bearer {token}"}
         resp = client.get("/api/v1/billing/balance", headers=headers)
         assert resp.status_code == 200
         balance = resp.json()
         assert balance["balance"] == 0, "New user should have 0 credits"
-        print(f"✓ User {user_id} created with initial balance: {balance['balance']}")
+        print(f"✓ User created with initial balance: {balance['balance']}")
     
     def test_02_get_pricing_tiers(self, client, mock_polar_client):
         """Test 2: Retrieve available pricing tiers."""
         email = f"test_{int(time.time())}@example.com"
         password = "TestPass123!"
         
-        # Signup and login
-        client.post("/signup", json={"email": email, "password": password})
-        resp = client.post("/login", json={"email": email, "password": password})
-        token = resp.json()["access_token"]
+        # Signup, verify, and login
+        token = signup_and_login(client, email, password)
         headers = {"Authorization": f"Bearer {token}"}
         
         # Get pricing
@@ -129,10 +176,8 @@ class TestBillingE2E:
         email = f"test_{int(time.time())}@example.com"
         password = "TestPass123!"
         
-        # Setup: signup and login
-        client.post("/signup", json={"email": email, "password": password})
-        resp = client.post("/login", json={"email": email, "password": password})
-        token = resp.json()["access_token"]
+        # Signup, verify, and login
+        token = signup_and_login(client, email, password)
         headers = {"Authorization": f"Bearer {token}"}
         
         # Create checkout
@@ -154,24 +199,24 @@ class TestBillingE2E:
         email = f"test_{int(time.time())}@example.com"
         password = "TestPass123!"
         
-        # Setup: signup, login, create checkout
-        client.post("/signup", json={"email": email, "password": password})
-        resp = client.post("/login", json={"email": email, "password": password})
-        token = resp.json()["access_token"]
+        # Signup, verify, and login
+        token = signup_and_login(client, email, password)
         headers = {"Authorization": f"Bearer {token}"}
         
+        # Create checkout
         resp = client.post("/api/v1/billing/checkout", 
             json={"package": "starter"},
             headers=headers
         )
-        order_id = resp.json()["order_id"]
+        checkout_resp = resp.json()
+        polar_order_id = checkout_resp["polar_order_id"]
         credits_expected = 100
         
         # Send webhook: payment confirmed
         webhook_payload = {
             "type": "order.confirmed",
             "data": {
-                "id": order_id,
+                "id": polar_order_id,
                 "status": "paid"
             },
             "timestamp": time.time()
@@ -206,10 +251,8 @@ class TestBillingE2E:
             silence = struct.pack('<h', 0) * (16000 * 5)  # 5 seconds
             wav_file.writeframes(silence)
         
-        # Setup: signup and login
-        client.post("/signup", json={"email": email, "password": password})
-        resp = client.post("/login", json={"email": email, "password": password})
-        token = resp.json()["access_token"]
+        # Signup, verify, and login
+        token = signup_and_login(client, email, password)
         headers = {"Authorization": f"Bearer {token}"}
         
         # Estimate credits
@@ -235,22 +278,21 @@ class TestBillingE2E:
         email = f"test_{int(time.time())}@example.com"
         password = "TestPass123!"
         
-        # Setup: signup, login, checkout, webhook
-        client.post("/signup", json={"email": email, "password": password})
-        resp = client.post("/login", json={"email": email, "password": password})
-        token = resp.json()["access_token"]
+        # Signup, verify, and login
+        token = signup_and_login(client, email, password)
         headers = {"Authorization": f"Bearer {token}"}
         
+        # Create checkout
         resp = client.post("/api/v1/billing/checkout", 
             json={"package": "starter"},
             headers=headers
         )
-        order_id = resp.json()["order_id"]
+        polar_order_id = resp.json()["polar_order_id"]
         
         # Send webhook
         webhook_payload = {
             "type": "order.confirmed",
-            "data": {"id": order_id, "status": "paid"},
+            "data": {"id": polar_order_id, "status": "paid"},
             "timestamp": time.time()
         }
         client.post("/api/v1/billing/webhook/polar", 
@@ -284,55 +326,41 @@ class TestBillingE2E:
         print("COMPLETE BILLING E2E FLOW")
         print("="*80)
         
-        # Phase 1: Signup
-        print("\n[1] Signup")
-        resp = client.post("/signup", json={
-            "email": email,
-            "password": password
-        })
-        assert resp.status_code == 200
-        user_id = resp.json()["user"]["id"]
-        print(f"✓ User created: {user_id}")
-        
-        # Phase 2: Login
-        print("[2] Login")
-        resp = client.post("/login", json={
-            "email": email,
-            "password": password
-        })
-        assert resp.status_code == 200
-        token = resp.json()["access_token"]
+        # Phase 1: Signup, verify, and login
+        print("\n[1] Signup & Verify & Login")
+        token = signup_and_login(client, email, password)
         headers = {"Authorization": f"Bearer {token}"}
         print(f"✓ Authenticated")
         
-        # Phase 3: Check initial balance
-        print("[3] Check initial balance")
+        # Phase 2: Check initial balance
+        print("[2] Check initial balance")
         resp = client.get("/api/v1/billing/balance", headers=headers)
         initial_balance = resp.json()["balance"]
         assert initial_balance == 0
         print(f"✓ Initial balance: {initial_balance} credits")
         
-        # Phase 4: Get pricing
-        print("[4] Get pricing tiers")
+        # Phase 3: Get pricing
+        print("[3] Get pricing tiers")
         resp = client.get("/api/v1/billing/pricing", headers=headers)
         tiers = resp.json()["tiers"]
         print(f"✓ Available packages: {len(tiers)}")
         
-        # Phase 5: Create checkout
-        print("[5] Create checkout session")
+        # Phase 4: Create checkout
+        print("[4] Create checkout session")
         resp = client.post("/api/v1/billing/checkout",
             json={"package": "starter"},
             headers=headers
         )
-        order_id = resp.json()["order_id"]
+        checkout_resp = resp.json()
+        polar_order_id = checkout_resp["polar_order_id"]
         credits_expected = 100
-        print(f"✓ Checkout created: {order_id}")
+        print(f"✓ Checkout created: order_id={checkout_resp['order_id'][:8]}...")
         
-        # Phase 6: Simulate webhook
-        print("[6] Simulate Polar webhook (payment confirmation)")
+        # Phase 5: Simulate webhook
+        print("[5] Simulate Polar webhook (payment confirmation)")
         webhook_payload = {
             "type": "order.confirmed",
-            "data": {"id": order_id, "status": "paid"},
+            "data": {"id": polar_order_id, "status": "paid"},
             "timestamp": time.time()
         }
         resp = client.post("/api/v1/billing/webhook/polar",
