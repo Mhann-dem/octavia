@@ -177,7 +177,7 @@ def create_checkout_session(
             amount_usd=tier.price_usd,
             status=PaymentStatus.PENDING,
             polar_checkout_url=checkout_url,
-            metadata=json.dumps(metadata)
+            payment_metadata=json.dumps(metadata)
         )
         
         db_session.add(payment)

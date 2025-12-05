@@ -50,7 +50,7 @@ class Payment(Base):
     amount_usd = Column(Float, nullable=False)
     status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False)
     polar_checkout_url = Column(String(500), nullable=True)
-    metadata = Column(Text, nullable=True)  # JSON with payment details
+    payment_metadata = Column(Text, nullable=True)  # JSON with payment details
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
