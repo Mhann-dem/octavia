@@ -131,8 +131,8 @@ class TestTranscriptionPipeline:
             f"/api/v1/jobs/{job_id}/process"
         )
         
-        # Should succeed with mocked transcription
-        assert process_response.status_code in [200, 500]  # 200 if succeeds, 500 if worker fails
+        # Should return 202 Accepted (async queue), or 500 if broker unavailable
+        assert process_response.status_code in [202, 500]  # 202 for async, 500 if error
     
     @patch('app.workers.transcribe_audio')
     def test_02_transcribe_with_language_detection(self, mock_transcribe, client, test_user_with_credits):

@@ -197,17 +197,24 @@ Updated process_job endpoint to handle video translation jobs.
 Add this to the existing upload_routes.py process_job function.
 """
 
-@router.post("/jobs/{job_id}/process", response_model=upload_schemas.JobOut)
+@router.post("/jobs/{job_id}/process", response_model=upload_schemas.JobOut, status_code=202)
 def process_job(
     job_id: str,
     user_id: str = Depends(get_current_user),
     db_session: Session = Depends(db.get_db),
 ):
     """
-    Process a job (transcribe, translate, synthesize, or video_translate).
-    Validates credits before processing and deducts them on completion.
-    Runs synchronously for now.
+    Queue a job for asynchronous processing via Celery.
+    Validates credits and queues the job, returning immediately (202 Accepted).
+    Returns job status for client polling.
     """
+    from app.celery_tasks import (
+        process_transcription,
+        process_translation,
+        process_synthesis,
+        process_video_translation,
+    )
+    
     job = db_session.query(Job).filter(Job.id == job_id, Job.user_id == user_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -267,109 +274,89 @@ def process_job(
         
         logger.info(f"Job {job_id}: User has sufficient credits ({user.credits} >= {credit_cost})")
         
-        # Process based on job type
+        # STEP 3: Update job status to PROCESSING and save metadata for worker
+        job.status = JobStatus.PROCESSING
+        job.credit_cost = credit_cost
+        db_session.commit()
+        logger.info(f"Job {job_id}: Status set to PROCESSING, queuing task")
+        
+        # STEP 4: Determine queue priority
+        # Premium/paid users get urgent queue, others get default
+        user_subscription = getattr(user, 'subscription', 'free')
+        queue_name = "urgent" if user_subscription in ("premium", "paid") else "default"
+        
+        # STEP 5: Queue task based on job type
+        task_metadata = json.loads(job.job_metadata) if job.job_metadata else {}
+        
         if job.job_type == "transcribe":
-            logger.info(f"Processing transcription job {job_id} from {input_file_path}")
-            metadata = json.loads(job.job_metadata) if job.job_metadata else {}
-            language = metadata.get("language")
+            logger.info(f"Queuing transcription job {job_id} to {queue_name} queue")
+            language = task_metadata.get("language")
             if language == "auto":
                 language = None
-            model_size = metadata.get("model_size", "base")
+            model_size = task_metadata.get("model_size", "base")
             
-            success = workers.transcribe_audio(
-                session=db_session,
-                job_id=job_id,
-                input_file_path=input_file_path,
-                language=language,
-                model_size=model_size
+            celery_task = process_transcription.apply_async(
+                args=[job_id, user_id, input_file_path, language, model_size],
+                queue=queue_name,
+                task_id=f"transcribe-{job_id}"
             )
+            job.celery_task_id = celery_task.id
             
-            if not success:
-                raise HTTPException(status_code=500, detail="Transcription processing failed")
-        
         elif job.job_type == "translate":
-            logger.info(f"Processing translation job {job_id}")
-            metadata = json.loads(job.job_metadata) if job.job_metadata else {}
-            source_lang = metadata.get("source_language", "en")
-            target_lang = metadata.get("target_language", "es")
+            logger.info(f"Queuing translation job {job_id} to {queue_name} queue")
+            source_lang = task_metadata.get("source_language", "en")
+            target_lang = task_metadata.get("target_language", "es")
             
-            success = workers.translate_from_transcription(
-                session=db_session,
-                job_id=job_id,
-                transcription_file=input_file_path,
-                source_lang=source_lang,
-                target_lang=target_lang
+            celery_task = process_translation.apply_async(
+                args=[job_id, user_id, input_file_path, source_lang, target_lang],
+                queue=queue_name,
+                task_id=f"translate-{job_id}"
             )
+            job.celery_task_id = celery_task.id
             
-            if not success:
-                raise HTTPException(status_code=500, detail="Translation processing failed")
-        
         elif job.job_type == "synthesize":
-            logger.info(f"Processing synthesis job {job_id}")
-            metadata = json.loads(job.job_metadata) if job.job_metadata else {}
-            language = metadata.get("language", "en")
+            logger.info(f"Queuing synthesis job {job_id} to {queue_name} queue")
+            language = task_metadata.get("language", "en")
             
-            success = workers.synthesize_audio(
-                session=db_session,
-                job_id=job_id,
-                input_file_path=input_file_path,
-                language=language
+            celery_task = process_synthesis.apply_async(
+                args=[job_id, user_id, input_file_path, language],
+                queue=queue_name,
+                task_id=f"synthesize-{job_id}"
             )
+            job.celery_task_id = celery_task.id
             
-            if not success:
-                raise HTTPException(status_code=500, detail="Synthesis processing failed")
-        
         elif job.job_type == "video_translate":
-            logger.info(f"Processing video translation job {job_id}")
-            metadata = json.loads(job.job_metadata) if job.job_metadata else {}
-            source_lang = metadata.get("source_language", "auto")
-            target_lang = metadata.get("target_language", "es")
-            model_size = metadata.get("model_size", "base")
+            logger.info(f"Queuing video translation job {job_id} to {queue_name} queue")
+            source_lang = task_metadata.get("source_language", "auto")
+            target_lang = task_metadata.get("target_language", "es")
+            model_size = task_metadata.get("model_size", "base")
             
-            success = workers.video_translate_pipeline(
-                session=db_session,
-                job_id=job_id,
-                input_file_path=input_file_path,
-                source_language=source_lang,
-                target_language=target_lang,
-                model_size=model_size,
-                enable_dubbing=True
+            celery_task = process_video_translation.apply_async(
+                args=[job_id, user_id, input_file_path, source_lang, target_lang, model_size],
+                queue=queue_name,
+                task_id=f"video_translate-{job_id}"
             )
-            
-            if not success:
-                raise HTTPException(status_code=500, detail="Video translation processing failed")
+            job.celery_task_id = celery_task.id
         
         else:
             raise HTTPException(status_code=400, detail=f"Unknown job type: {job.job_type}")
         
-        # STEP 3: Deduct credits on successful completion
-        if job.status == JobStatus.COMPLETED:
-            logger.info(f"Job {job_id}: Deducting {credit_cost} credits")
-            success = deduct_credits(
-                session=db_session,
-                user_id=user_id,
-                job_id=job_id,
-                job_type=job.job_type,
-                credits=credit_cost,
-                reason=f"{job.job_type} job completed"
-            )
-            
-            if not success:
-                logger.error(f"Job {job_id}: Failed to deduct credits, but job completed")
-                # Don't fail the job if credit deduction fails - job is already done
+        # Save the Celery task ID and commit
+        db_session.commit()
+        logger.info(f"Job {job_id}: Successfully queued with Celery task ID {job.celery_task_id}")
         
-        # Refresh job to get updated status and output_file
+        # Refresh and return job status
         db_session.refresh(job)
         return job
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error processing job {job_id}: {str(e)}", exc_info=True)
+        logger.error(f"Error queuing job {job_id}: {str(e)}", exc_info=True)
         job.status = JobStatus.FAILED
-        job.error_message = str(e)
+        job.error_message = f"Failed to queue: {str(e)}"
         db_session.commit()
-        raise HTTPException(status_code=500, detail=f"Error processing job: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error queuing job: {str(e)}")
 
 
 @router.post("/estimate", response_model=upload_schemas.CreditEstimate)

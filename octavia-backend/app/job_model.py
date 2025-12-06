@@ -27,5 +27,7 @@ class Job(Base):
     status = Column(Enum(JobStatus), default=JobStatus.PENDING, nullable=False)
     error_message = Column(String, nullable=True)
     job_metadata = Column(Text, nullable=True)  # JSON string with job-specific data
+    celery_task_id = Column(String(255), nullable=True)  # Celery task ID for async tracking
+    credit_cost = Column(String(36), nullable=True)  # Credit cost calculated at queue time
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)
