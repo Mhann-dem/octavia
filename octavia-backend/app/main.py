@@ -12,6 +12,7 @@ from app.models import User
 from app.schemas.auth import SignupPayload, LoginPayload, TokenResponse, UserOut
 from app.utils.email import send_verification_email
 from app.routes.billing import router as billing_router
+from app.upload_routes import router as upload_router
 
 
 app = FastAPI(title="Octavia Backend")
@@ -21,6 +22,7 @@ Base.metadata.create_all(bind=engine)
 
 # Include routers
 app.include_router(billing_router)
+app.include_router(upload_router)
 
 frontend = os.environ.get("NEXT_PUBLIC_APP_URL", "http://localhost:3000")
 

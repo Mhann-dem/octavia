@@ -73,3 +73,21 @@ class TransactionHistoryOut(BaseModel):
     total_purchased: int
     total_used: int
     current_balance: int
+
+
+class CreditEstimateRequest(BaseModel):
+    """Request to estimate credits needed for a job."""
+    job_type: str  # 'transcribe', 'translate', 'synthesize', 'video_translate'
+    input_file_path: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    duration_override: Optional[int] = None
+    target_language: Optional[str] = None
+
+
+class CreditEstimateResponse(BaseModel):
+    """Response with estimated credit cost."""
+    job_type: str
+    estimated_credits: int
+    current_balance: int
+    sufficient_balance: bool
+    reason: str

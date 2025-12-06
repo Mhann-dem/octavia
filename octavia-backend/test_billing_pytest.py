@@ -256,7 +256,7 @@ class TestBillingE2E:
         headers = {"Authorization": f"Bearer {token}"}
         
         # Estimate credits
-        resp = client.post("/api/v1/estimate",
+        resp = client.post("/api/v1/billing/estimate",
             json={
                 "job_type": "transcribe",
                 "input_file_path": audio_file,

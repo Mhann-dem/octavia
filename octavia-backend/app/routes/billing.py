@@ -17,12 +17,14 @@ from app.models.billing import (
 from app.schemas.billing import (
     CreditPackageType, CheckoutRequest, CheckoutResponse, 
     PricingListOut, PricingTierOut, CreditBalance, 
-    TransactionHistoryOut, CreditTransactionOut
+    TransactionHistoryOut, CreditTransactionOut,
+    CreditEstimateRequest, CreditEstimateResponse
 )
 from app.services.polar import (
     get_polar_client, WEBHOOK_ORDER_CONFIRMED, 
     WEBHOOK_ORDER_UPDATED, WEBHOOK_CHECKOUT_UPDATED
 )
+from app.services.credit_calculator import estimate_credits
 
 logger = logging.getLogger(__name__)
 
@@ -348,6 +350,52 @@ def get_transaction_history(
     except Exception as e:
         logger.error(f"Error fetching transaction history: {str(e)}")
         raise HTTPException(status_code=500, detail="Error fetching transactions")
+
+
+@router.post("/estimate", response_model=CreditEstimateResponse)
+def estimate_job_credits(
+    request: CreditEstimateRequest,
+    user_id: str = Depends(get_current_user),
+    db_session: Session = Depends(get_db),
+):
+    """Estimate the number of credits needed for a job."""
+    try:
+        # Get user current balance
+        user = db_session.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        current_balance = user.credits
+        
+        # Use duration_override if provided, otherwise calculate from file
+        duration_minutes = request.duration_override
+        
+        if duration_minutes is None:
+            if request.duration_minutes:
+                duration_minutes = request.duration_minutes
+            else:
+                # Default to 1 minute if no duration provided
+                duration_minutes = 1
+        
+        # Estimate credits
+        estimated = estimate_credits(request.job_type, duration_minutes)
+        
+        sufficient = current_balance >= estimated
+        reason = f"Estimated cost for {request.job_type} job ({duration_minutes} min)"
+        
+        return CreditEstimateResponse(
+            job_type=request.job_type,
+            estimated_credits=estimated,
+            current_balance=current_balance,
+            sufficient_balance=sufficient,
+            reason=reason
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error estimating credits: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error estimating credits")
 
 
 def deduct_credits(
