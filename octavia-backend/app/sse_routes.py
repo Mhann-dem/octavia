@@ -16,6 +16,7 @@ router = APIRouter()
 async def job_progress_stream(job_id: str, user_id: str, db_session: Session):
     """Stream job progress updates as Server-Sent Events."""
     last_status = None
+    last_progress = None
     last_update = datetime.now()
     check_interval = 0.5  # Check every 500ms
     
@@ -31,22 +32,30 @@ async def job_progress_stream(job_id: str, user_id: str, db_session: Session):
                 yield f"data: {json.dumps({'error': 'Job not found'})}\n\n"
                 break
             
-            # Prepare status data
+            # Prepare status data with progress tracking
             status_data = {
                 "job_id": job.id,
                 "status": job.status,
                 "job_type": job.job_type,
+                "phase": job.phase if hasattr(job, 'phase') else None,
+                "progress_percentage": job.progress_percentage if hasattr(job, 'progress_percentage') else 0.0,
+                "current_step": job.current_step if hasattr(job, 'current_step') else None,
                 "created_at": job.created_at.isoformat() if job.created_at else None,
+                "started_at": job.started_at.isoformat() if hasattr(job, 'started_at') and job.started_at else None,
                 "completed_at": job.completed_at.isoformat() if job.completed_at else None,
                 "error_message": job.error_message,
                 "output_file": job.output_file,
                 "timestamp": datetime.now().isoformat(),
             }
             
-            # Only send update if status changed or on first message
-            if job.status != last_status or (datetime.now() - last_update).total_seconds() >= 1:
+            # Only send update if status/progress changed or on first message
+            progress_changed = (last_progress is not None and 
+                              status_data.get("progress_percentage") != last_progress)
+            
+            if job.status != last_status or progress_changed or (datetime.now() - last_update).total_seconds() >= 1:
                 yield f"data: {json.dumps(status_data)}\n\n"
                 last_status = job.status
+                last_progress = status_data.get("progress_percentage")
                 last_update = datetime.now()
             
             # Stop streaming if job is done
@@ -123,6 +132,7 @@ def get_job_status(
     """
     Get current job status (non-streaming alternative to SSE).
     Useful for polling or fetching current state without persistent connection.
+    Returns progress information including phase, percentage, and current step.
     """
     job = db_session.query(Job).filter(
         Job.id == job_id,
@@ -136,7 +146,11 @@ def get_job_status(
         "job_id": job.id,
         "status": job.status,
         "job_type": job.job_type,
+        "phase": job.phase if hasattr(job, 'phase') else None,
+        "progress_percentage": job.progress_percentage if hasattr(job, 'progress_percentage') else 0.0,
+        "current_step": job.current_step if hasattr(job, 'current_step') else None,
         "created_at": job.created_at.isoformat() if job.created_at else None,
+        "started_at": job.started_at.isoformat() if hasattr(job, 'started_at') and job.started_at else None,
         "completed_at": job.completed_at.isoformat() if job.completed_at else None,
         "error_message": job.error_message,
         "output_file": job.output_file,

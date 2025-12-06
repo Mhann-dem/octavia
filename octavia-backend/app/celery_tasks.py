@@ -96,10 +96,11 @@ app.conf.update(
 # Task definitions
 @app.task(bind=True, name="app.celery_tasks.process_transcription")
 def process_transcription(self, job_id: str, user_id: str, input_file_path: str, language: str = None, model_size: str = "base"):
-    """Async transcription task."""
+    """Async transcription task with progress tracking."""
     from app.core.database import SessionLocal
-    from app.job_model import Job, JobStatus
+    from app.job_model import Job, JobStatus, JobPhase
     from app import workers
+    from datetime import datetime
     
     db = SessionLocal()
     try:
@@ -107,12 +108,21 @@ def process_transcription(self, job_id: str, user_id: str, input_file_path: str,
         if not job:
             return {"status": "error", "message": f"Job {job_id} not found"}
         
-        # Update job status
+        # Update job status and track start
         job.status = JobStatus.PROCESSING
+        job.phase = JobPhase.TRANSCRIBING
+        job.current_step = "Initializing transcription"
+        job.progress_percentage = 0.0
+        job.started_at = datetime.utcnow()
         db.commit()
         
         # Execute transcription
         try:
+            # Update progress: 20% - starting transcription
+            job.progress_percentage = 20.0
+            job.current_step = "Transcribing audio with Whisper"
+            db.commit()
+            
             success = workers.transcribe_audio(
                 session=db,
                 job_id=job_id,
@@ -122,18 +132,28 @@ def process_transcription(self, job_id: str, user_id: str, input_file_path: str,
             )
             
             if success:
+                # Update progress: 100% - completed
                 job.status = JobStatus.COMPLETED
+                job.phase = JobPhase.COMPLETED
+                job.current_step = "Transcription completed"
+                job.progress_percentage = 100.0
                 db.commit()
                 return {"status": "success", "job_id": job_id}
             else:
                 job.status = JobStatus.FAILED
+                job.phase = JobPhase.FAILED
+                job.current_step = "Transcription failed"
                 job.error_message = "Transcription failed"
+                job.progress_percentage = 0.0
                 db.commit()
                 return {"status": "error", "message": "Transcription failed"}
                 
         except Exception as e:
             job.status = JobStatus.FAILED
+            job.phase = JobPhase.FAILED
+            job.current_step = f"Error: {str(e)}"
             job.error_message = str(e)
+            job.progress_percentage = 0.0
             db.commit()
             raise
             
@@ -141,12 +161,14 @@ def process_transcription(self, job_id: str, user_id: str, input_file_path: str,
         db.close()
 
 
+
 @app.task(bind=True, name="app.celery_tasks.process_translation")
 def process_translation(self, job_id: str, user_id: str, input_file_path: str, source_lang: str, target_lang: str):
-    """Async translation task."""
+    """Async translation task with progress tracking."""
     from app.core.database import SessionLocal
-    from app.job_model import Job, JobStatus
+    from app.job_model import Job, JobStatus, JobPhase
     from app import workers
+    from datetime import datetime
     
     db = SessionLocal()
     try:
@@ -155,9 +177,18 @@ def process_translation(self, job_id: str, user_id: str, input_file_path: str, s
             return {"status": "error", "message": f"Job {job_id} not found"}
         
         job.status = JobStatus.PROCESSING
+        job.phase = JobPhase.TRANSLATING
+        job.current_step = "Initializing translation"
+        job.progress_percentage = 0.0
+        job.started_at = datetime.utcnow()
         db.commit()
         
         try:
+            # Update progress: 20% - starting translation
+            job.progress_percentage = 20.0
+            job.current_step = f"Translating from {source_lang} to {target_lang}"
+            db.commit()
+            
             success = workers.translate_from_transcription(
                 session=db,
                 job_id=job_id,
@@ -168,17 +199,26 @@ def process_translation(self, job_id: str, user_id: str, input_file_path: str, s
             
             if success:
                 job.status = JobStatus.COMPLETED
+                job.phase = JobPhase.COMPLETED
+                job.current_step = "Translation completed"
+                job.progress_percentage = 100.0
                 db.commit()
                 return {"status": "success", "job_id": job_id}
             else:
                 job.status = JobStatus.FAILED
+                job.phase = JobPhase.FAILED
+                job.current_step = "Translation failed"
                 job.error_message = "Translation failed"
+                job.progress_percentage = 0.0
                 db.commit()
                 return {"status": "error", "message": "Translation failed"}
                 
         except Exception as e:
             job.status = JobStatus.FAILED
+            job.phase = JobPhase.FAILED
+            job.current_step = f"Error: {str(e)}"
             job.error_message = str(e)
+            job.progress_percentage = 0.0
             db.commit()
             raise
             
@@ -188,10 +228,11 @@ def process_translation(self, job_id: str, user_id: str, input_file_path: str, s
 
 @app.task(bind=True, name="app.celery_tasks.process_synthesis")
 def process_synthesis(self, job_id: str, user_id: str, input_file_path: str, language: str = "en"):
-    """Async synthesis task."""
+    """Async synthesis task with progress tracking."""
     from app.core.database import SessionLocal
-    from app.job_model import Job, JobStatus
+    from app.job_model import Job, JobStatus, JobPhase
     from app import workers
+    from datetime import datetime
     
     db = SessionLocal()
     try:
@@ -200,9 +241,18 @@ def process_synthesis(self, job_id: str, user_id: str, input_file_path: str, lan
             return {"status": "error", "message": f"Job {job_id} not found"}
         
         job.status = JobStatus.PROCESSING
+        job.phase = JobPhase.SYNTHESIZING
+        job.current_step = "Initializing synthesis"
+        job.progress_percentage = 0.0
+        job.started_at = datetime.utcnow()
         db.commit()
         
         try:
+            # Update progress: 20% - starting synthesis
+            job.progress_percentage = 20.0
+            job.current_step = f"Synthesizing audio in {language}"
+            db.commit()
+            
             success = workers.synthesize_audio(
                 session=db,
                 job_id=job_id,
@@ -212,17 +262,26 @@ def process_synthesis(self, job_id: str, user_id: str, input_file_path: str, lan
             
             if success:
                 job.status = JobStatus.COMPLETED
+                job.phase = JobPhase.COMPLETED
+                job.current_step = "Synthesis completed"
+                job.progress_percentage = 100.0
                 db.commit()
                 return {"status": "success", "job_id": job_id}
             else:
                 job.status = JobStatus.FAILED
+                job.phase = JobPhase.FAILED
+                job.current_step = "Synthesis failed"
                 job.error_message = "Synthesis failed"
+                job.progress_percentage = 0.0
                 db.commit()
                 return {"status": "error", "message": "Synthesis failed"}
                 
         except Exception as e:
             job.status = JobStatus.FAILED
+            job.phase = JobPhase.FAILED
+            job.current_step = f"Error: {str(e)}"
             job.error_message = str(e)
+            job.progress_percentage = 0.0
             db.commit()
             raise
             
@@ -233,10 +292,11 @@ def process_synthesis(self, job_id: str, user_id: str, input_file_path: str, lan
 @app.task(bind=True, name="app.celery_tasks.process_video_translation")
 def process_video_translation(self, job_id: str, user_id: str, input_file_path: str, 
                                source_lang: str, target_lang: str, model_size: str = "base"):
-    """Async video translation task."""
+    """Async video translation task with progress tracking."""
     from app.core.database import SessionLocal
-    from app.job_model import Job, JobStatus
+    from app.job_model import Job, JobStatus, JobPhase
     from app import workers
+    from datetime import datetime
     
     db = SessionLocal()
     try:
@@ -245,9 +305,18 @@ def process_video_translation(self, job_id: str, user_id: str, input_file_path: 
             return {"status": "error", "message": f"Job {job_id} not found"}
         
         job.status = JobStatus.PROCESSING
+        job.phase = JobPhase.TRANSCRIBING  # Video translation starts with transcription
+        job.current_step = "Initializing video translation pipeline"
+        job.progress_percentage = 0.0
+        job.started_at = datetime.utcnow()
         db.commit()
         
         try:
+            # Update progress: 15% - starting transcription phase
+            job.progress_percentage = 15.0
+            job.current_step = f"Transcribing video audio from {source_lang}"
+            db.commit()
+            
             success = workers.video_translate_pipeline(
                 session=db,
                 job_id=job_id,
@@ -260,17 +329,26 @@ def process_video_translation(self, job_id: str, user_id: str, input_file_path: 
             
             if success:
                 job.status = JobStatus.COMPLETED
+                job.phase = JobPhase.COMPLETED
+                job.current_step = "Video translation completed"
+                job.progress_percentage = 100.0
                 db.commit()
                 return {"status": "success", "job_id": job_id}
             else:
                 job.status = JobStatus.FAILED
+                job.phase = JobPhase.FAILED
+                job.current_step = "Video translation failed"
                 job.error_message = "Video translation failed"
+                job.progress_percentage = 0.0
                 db.commit()
                 return {"status": "error", "message": "Video translation failed"}
                 
         except Exception as e:
             job.status = JobStatus.FAILED
+            job.phase = JobPhase.FAILED
+            job.current_step = f"Error: {str(e)}"
             job.error_message = str(e)
+            job.progress_percentage = 0.0
             db.commit()
             raise
             
