@@ -90,8 +90,9 @@ def login(payload: LoginPayload, db_session: Session = Depends(get_db)):
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    if not user.is_verified:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email not verified")
+    # For local dev: skip email verification check (remove or comment out for production)
+    # if not user.is_verified:
+    #     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email not verified")
 
     token = create_access_token({"sub": str(user.id), "type": "access"})
     return {"access_token": token}

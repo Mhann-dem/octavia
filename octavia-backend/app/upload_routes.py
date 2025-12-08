@@ -180,6 +180,31 @@ def create_transcribe_job(
     return job
 
 
+@router.post("/jobs/video-translate/create", response_model=upload_schemas.JobOut)
+def create_video_translate_job(
+    request: upload_schemas.VideoTranslateRequest,
+    user_id: str = Depends(get_current_user),
+    db_session: Session = Depends(db.get_db),
+):
+    """Create a video translation job."""
+    job = Job(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        job_type="video_translate",
+        input_file=request.storage_path,  # Store full path
+        status=JobStatus.PENDING,
+        job_metadata=json.dumps({
+            "source_language": request.source_language,
+            "target_language": request.target_language,
+            "model_size": request.model_size,
+        }),
+    )
+    db_session.add(job)
+    db_session.commit()
+    db_session.refresh(job)
+    return job
+
+
 @router.get("/jobs/{job_id}", response_model=upload_schemas.JobOut)
 def get_job(
     job_id: str,

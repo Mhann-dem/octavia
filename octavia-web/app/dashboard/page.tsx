@@ -105,7 +105,7 @@ const getColorClasses = (color: string) => {
     return colorMap[color] || colorMap["primary-purple"];
 };
 
-export default function DashboardPage() {
+function DashboardPage() {
     const handleLogout = () => {
         clearAuthToken();
         window.location.href = '/login';

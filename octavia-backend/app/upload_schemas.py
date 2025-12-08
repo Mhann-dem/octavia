@@ -52,6 +52,15 @@ class TranslateRequest(BaseModel):
     target_language: str = "es"
 
 
+class VideoTranslateRequest(BaseModel):
+    """Request to translate a video."""
+    file_id: str
+    storage_path: str
+    source_language: str = "en"
+    target_language: str = "es"
+    model_size: Optional[str] = "base"  # base, small, medium, large
+
+
 class SynthesizeRequest(BaseModel):
     """Request to synthesize audio from text."""
     job_id: str
