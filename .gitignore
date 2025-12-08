@@ -2,3 +2,4 @@ pyvideotrans/
 win-pyvideotrans-v3.85.7z
 .DS_Store
 octavia-backend/test_videos/*.mp4
+octavia-backend/test_videos/*.mp4
