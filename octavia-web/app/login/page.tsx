@@ -21,7 +21,7 @@ export default function LoginPage() {
         try {
             const useProxy = process.env.NEXT_PUBLIC_USE_DEV_PROXY === 'true';
             const apiBase = useProxy ? '' : (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001");
-            const loginUrl = `${apiBase.replace(/\/$/, "")}/login`;
+            const loginUrl = useProxy ? '/api/proxy/login' : `${apiBase.replace(/\/$/, "")}/login`;
             // debug: log where we are posting
             console.debug("Login: POST ->", loginUrl);
 
@@ -45,7 +45,7 @@ export default function LoginPage() {
                 console.debug("Login: token stored", Boolean(data.access_token));
             }
             // Wait for server to set/authenticate the session cookie, then navigate.
-            const meUrl = `${apiBase.replace(/\/$/, "")}/api/v1/auth/me`;
+            const meUrl = useProxy ? '/api/v1/auth/me' : `${apiBase.replace(/\/$/, "")}/api/v1/auth/me`;
             async function waitForSession(retries = 6, intervalMs = 300) {
                 for (let i = 0; i < retries; i++) {
                     try {
@@ -61,19 +61,17 @@ export default function LoginPage() {
 
             const sessionReady = await waitForSession(8, 300);
             if (sessionReady) {
+                // Prefer client router but enforce a hard redirect to guarantee navigation
                 try {
                     router.push('/dashboard');
                 } catch (navErr) {
                     console.warn('router.push failed, falling back to hard redirect', navErr);
-                    window.location.href = '/dashboard';
                 }
+                // Ensure navigation even if router.push silently no-ops
+                window.location.href = '/dashboard';
             } else {
-                // Fallback: attempt a navigation anyway
-                try {
-                    router.push('/dashboard');
-                } catch (navErr) {
-                    window.location.href = '/dashboard';
-                }
+                // Fallback: perform a hard redirect
+                window.location.href = '/dashboard';
             }
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : String(err));

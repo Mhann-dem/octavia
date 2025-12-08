@@ -48,7 +48,10 @@ export function isAuthenticated(): boolean {
 export async function fetchSession(): Promise<unknown | null> {
     try {
         const useProxy = process.env.NEXT_PUBLIC_USE_DEV_PROXY === 'true';
-        const apiBase = useProxy ? '' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001').replace(/\/$/, '');
+        // Accept either NEXT_PUBLIC_API_URL or NEXT_PUBLIC_API_BASE_URL for compatibility
+        const envApi = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+        const apiFallback = envApi || 'http://localhost:8001';
+        const apiBase = useProxy ? '' : apiFallback.replace(/\/$/, '');
         const url = `${apiBase}/api/v1/auth/me`;
         const res = await fetch(url, { credentials: 'include' });
         if (!res.ok) return null;
@@ -73,7 +76,9 @@ export async function authenticatedFetch(
         headers.set('Authorization', `Bearer ${token}`);
     }
     const useProxy = process.env.NEXT_PUBLIC_USE_DEV_PROXY === 'true';
-    const apiBase = useProxy ? '' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001').replace(/\/$/, '');
+    const envApi = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+    const apiFallback = envApi || 'http://localhost:8001';
+    const apiBase = useProxy ? '' : apiFallback.replace(/\/$/, '');
     const target = url.startsWith('/') ? `${apiBase}${url}` : url;
 
     return fetch(target, {
