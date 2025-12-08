@@ -1,5 +1,6 @@
 """Server-Sent Events (SSE) endpoint for real-time job progress updates."""
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from fastapi.responses import StreamingResponse
 import json
 import asyncio
@@ -8,9 +9,10 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.job_model import Job, JobStatus
+from app.core import security
 from app.upload_routes import get_current_user
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1", tags=["sse"])
 
 
 async def job_progress_stream(job_id: str, user_id: str, db_session: Session):
@@ -77,7 +79,8 @@ async def job_progress_stream(job_id: str, user_id: str, db_session: Session):
 @router.get("/jobs/{job_id}/stream")
 async def stream_job_progress(
     job_id: str,
-    user_id: str = Depends(get_current_user),
+    token: Optional[str] = Query(None, description="Dev-only: JWT token as query param for EventSource"),
+    authorization: Optional[str] = Header(None),
     db_session: Session = Depends(get_db),
 ):
     """
@@ -102,15 +105,24 @@ async def stream_job_progress(
     });
     ```
     """
+    # Resolve user_id: allow dev-only `?token=` query param for EventSource (browser can't set headers)
+    if token:
+        payload = security.decode_token(token)
+        if not payload:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        user_id = payload.get("sub")
+    else:
+        user_id = get_current_user(authorization)
+
     # Verify job exists and belongs to user
     job = db_session.query(Job).filter(
         Job.id == job_id,
         Job.user_id == user_id
     ).first()
-    
+
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     return StreamingResponse(
         job_progress_stream(job_id, user_id, db_session),
         media_type="text/event-stream",
@@ -126,7 +138,8 @@ async def stream_job_progress(
 @router.get("/jobs/{job_id}/status")
 def get_job_status(
     job_id: str,
-    user_id: str = Depends(get_current_user),
+    token: Optional[str] = Query(None, description="Dev-only: JWT token as query param for polling"),
+    authorization: Optional[str] = Header(None),
     db_session: Session = Depends(get_db),
 ):
     """
@@ -134,11 +147,20 @@ def get_job_status(
     Useful for polling or fetching current state without persistent connection.
     Returns progress information including phase, percentage, and current step.
     """
+    # Resolve user_id similarly to stream endpoint
+    if token:
+        payload = security.decode_token(token)
+        if not payload:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        user_id = payload.get("sub")
+    else:
+        user_id = get_current_user(authorization)
+
     job = db_session.query(Job).filter(
         Job.id == job_id,
         Job.user_id == user_id
     ).first()
-    
+
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     

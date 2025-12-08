@@ -8,7 +8,8 @@ from datetime import datetime
 from typing import Optional
 from pathlib import Path
 
-from . import db, models, security, upload_schemas, workers
+from . import db, models, upload_schemas, workers
+from .core import security
 from .storage import save_upload, delete_file
 from .job_model import Job, JobStatus
 from .credit_calculator import CreditCalculator
