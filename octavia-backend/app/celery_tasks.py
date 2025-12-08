@@ -1,8 +1,11 @@
 """Celery configuration and task definitions for Octavia backend."""
 import os
+import logging
 from celery import Celery
 from celery.schedules import crontab
 from kombu import Queue, Exchange
+
+logger = logging.getLogger(__name__)
 
 # Determine if using real Redis or fake Redis for development
 USE_FAKE_REDIS = os.environ.get("USE_FAKE_REDIS", "false").lower() == "true"
@@ -292,10 +295,12 @@ def process_synthesis(self, job_id: str, user_id: str, input_file_path: str, lan
 @app.task(bind=True, name="app.celery_tasks.process_video_translation")
 def process_video_translation(self, job_id: str, user_id: str, input_file_path: str, 
                                source_lang: str, target_lang: str, model_size: str = "base"):
-    """Async video translation task with progress tracking."""
+    """Async video translation task with progress tracking and credit deduction."""
     from app.core.database import SessionLocal
     from app.job_model import Job, JobStatus, JobPhase
     from app import workers
+    from app.credit_calculator import CreditCalculator
+    from app.billing_models import CreditTransaction
     from datetime import datetime
     
     db = SessionLocal()
@@ -332,6 +337,42 @@ def process_video_translation(self, job_id: str, user_id: str, input_file_path: 
                 job.phase = JobPhase.COMPLETED
                 job.current_step = "Video translation completed"
                 job.progress_percentage = 100.0
+                
+                # Deduct credits on successful completion
+                try:
+                    from app.models import User
+                    
+                    user = db.query(User).filter(User.id == user_id).first()
+                    if user:
+                        # Calculate credits based on video duration
+                        credit_cost = CreditCalculator.calculate_credits(
+                            job_type="video_translate",
+                            input_file_path=input_file_path
+                        )
+                        
+                        if user.credits >= credit_cost:
+                            user.credits -= credit_cost
+                            
+                            # Log the transaction
+                            transaction = CreditTransaction(
+                                user_id=user_id,
+                                type="deduction",
+                                credits_amount=credit_cost,
+                                reason=f"Video translation job {job_id}",
+                                balance_after=user.credits,
+                            )
+                            db.add(transaction)
+                            db.commit()
+                            job.current_step = f"Video translation completed. {credit_cost} credits deducted"
+                        else:
+                            # Should not reach here due to pre-check, but handle gracefully
+                            logger.warning(f"User {user_id} insufficient credits for job {job_id}")
+                    else:
+                        logger.error(f"User {user_id} not found for credit deduction")
+                except Exception as credit_error:
+                    logger.error(f"Error deducting credits: {str(credit_error)}")
+                    # Don't fail the job if credit deduction fails
+                
                 db.commit()
                 return {"status": "success", "job_id": job_id}
             else:
@@ -342,6 +383,109 @@ def process_video_translation(self, job_id: str, user_id: str, input_file_path: 
                 job.progress_percentage = 0.0
                 db.commit()
                 return {"status": "error", "message": "Video translation failed"}
+                
+        except Exception as e:
+            job.status = JobStatus.FAILED
+            job.phase = JobPhase.FAILED
+            job.current_step = f"Error: {str(e)}"
+            job.error_message = str(e)
+            job.progress_percentage = 0.0
+            db.commit()
+            raise
+            
+    finally:
+        db.close()
+
+
+@app.task(bind=True, name="app.celery_tasks.process_audio_translation")
+def process_audio_translation(self, job_id: str, user_id: str, input_file_path: str,
+                              source_lang: str, target_lang: str, model_size: str = "base"):
+    """Async audio translation task with progress tracking and credit deduction."""
+    from app.core.database import SessionLocal
+    from app.job_model import Job, JobStatus, JobPhase
+    from app import workers
+    from app.credit_calculator import CreditCalculator
+    from app.billing_models import CreditTransaction
+    from datetime import datetime
+    
+    db = SessionLocal()
+    try:
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            return {"status": "error", "message": f"Job {job_id} not found"}
+        
+        job.status = JobStatus.PROCESSING
+        job.phase = JobPhase.TRANSCRIBING
+        job.current_step = "Initializing audio translation pipeline"
+        job.progress_percentage = 0.0
+        job.started_at = datetime.utcnow()
+        db.commit()
+        
+        try:
+            # Update progress: 20% - starting transcription phase
+            job.progress_percentage = 20.0
+            job.current_step = f"Transcribing audio from {source_lang}"
+            db.commit()
+            
+            success = workers.audio_translate_pipeline(
+                session=db,
+                job_id=job_id,
+                input_file_path=input_file_path,
+                source_language=source_lang,
+                target_language=target_lang,
+                model_size=model_size,
+            )
+            
+            if success:
+                job.status = JobStatus.COMPLETED
+                job.phase = JobPhase.COMPLETED
+                job.current_step = "Audio translation completed"
+                job.progress_percentage = 100.0
+                
+                # Deduct credits on successful completion
+                try:
+                    from app.models import User
+                    
+                    user = db.query(User).filter(User.id == user_id).first()
+                    if user:
+                        # Calculate credits based on audio duration
+                        credit_cost = CreditCalculator.calculate_credits(
+                            job_type="audio_translate",
+                            input_file_path=input_file_path
+                        )
+                        
+                        if user.credits >= credit_cost:
+                            user.credits -= credit_cost
+                            
+                            # Log the transaction
+                            transaction = CreditTransaction(
+                                user_id=user_id,
+                                type="deduction",
+                                credits_amount=credit_cost,
+                                reason=f"Audio translation job {job_id}",
+                                balance_after=user.credits,
+                            )
+                            db.add(transaction)
+                            db.commit()
+                            job.current_step = f"Audio translation completed. {credit_cost} credits deducted"
+                        else:
+                            logger.warning(f"User {user_id} insufficient credits for job {job_id}")
+                    else:
+                        logger.error(f"User {user_id} not found for credit deduction")
+                except Exception as credit_error:
+                    logger.error(f"Error deducting credits: {str(credit_error)}")
+                    # Don't fail the job if credit deduction fails
+                
+                db.commit()
+                return {"status": "success", "job_id": job_id}
+            else:
+                job.status = JobStatus.FAILED
+                job.phase = JobPhase.FAILED
+                job.current_step = "Audio translation failed"
+                job.error_message = "Audio translation failed"
+                job.progress_percentage = 0.0
+                db.commit()
+                return {"status": "error", "message": "Audio translation failed"}
                 
         except Exception as e:
             job.status = JobStatus.FAILED

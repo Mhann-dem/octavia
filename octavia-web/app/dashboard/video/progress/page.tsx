@@ -122,6 +122,43 @@ export default function VideoProgressPage() {
     const isProcessing = job.status === "processing" || job.status === "pending";
     const progress = job.progress_percentage || 0;
 
+    const handleDownload = async () => {
+        try {
+            const token = getAuthToken();
+            const response = await fetch(`${API_BASE_URL}/api/v1/jobs/${jobId}/download`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to download file");
+            }
+
+            // Get filename from content-disposition header or use default
+            const contentDisposition = response.headers.get("content-disposition");
+            let filename = `translated_${jobId}.mp4`;
+            if (contentDisposition) {
+                const matches = contentDisposition.match(/filename="?([^"]+)"?/);
+                if (matches) filename = matches[1];
+            }
+
+            // Create blob and download
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (err) {
+            console.error("Download error:", err);
+            setError(err instanceof Error ? err.message : "Error downloading file");
+        }
+    };
+
     return (
         <div className="space-y-8">
             {/* Header */}
@@ -213,15 +250,15 @@ export default function VideoProgressPage() {
                             <h3 className="text-white font-bold">Your translated video is ready!</h3>
                             <p className="text-slate-400 text-sm mt-1">Download your translation or share it with others</p>
                         </div>
-                        <a
-                            href={`${API_BASE_URL}/api/v1/download/${jobId}`}
+                        <button
+                            onClick={handleDownload}
                             className="btn-border-beam"
                         >
                             <div className="btn-border-beam-inner flex items-center justify-center gap-2 py-3 px-6">
                                 <Download className="w-4 h-4" />
                                 Download
                             </div>
-                        </a>
+                        </button>
                     </div>
                 </motion.div>
             )}

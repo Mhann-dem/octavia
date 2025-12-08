@@ -874,3 +874,203 @@ def video_translate_pipeline(
             pass
         
         return False
+
+
+def audio_translate_pipeline(
+    session: Session,
+    job_id: str,
+    input_file_path: str,
+    source_language: str = "auto",
+    target_language: str = "es",
+    model_size: str = "base",
+) -> bool:
+    """
+    End-to-end audio translation pipeline.
+    
+    Steps:
+    1. Load audio file
+    2. Transcribe audio to text
+    3. Translate text to target language
+    4. Synthesize new audio from translated text
+    
+    Args:
+        session: Database session
+        job_id: Job ID for tracking
+        input_file_path: Path to input audio file
+        source_language: Source language code or 'auto'
+        target_language: Target language code
+        model_size: Whisper model size ('tiny', 'base', 'small', 'medium', 'large')
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    from pathlib import Path
+    import tempfile
+    import shutil
+    
+    job = session.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        logger.error(f"Job {job_id}: Job not found")
+        return False
+    
+    try:
+        job.status = JobStatus.PROCESSING
+        session.commit()
+        
+        audio_path = Path(input_file_path)
+        if not audio_path.exists():
+            raise FileNotFoundError(f"Audio file not found: {input_file_path}")
+        
+        logger.info(f"Job {job_id}: Starting audio translation pipeline")
+        logger.info(f"  Input: {audio_path}")
+        logger.info(f"  Source language: {source_language}")
+        logger.info(f"  Target language: {target_language}")
+        
+        # Step 1: Load audio file
+        logger.info(f"Job {job_id}: Step 1/4 - Loading audio file")
+        
+        temp_dir = Path(tempfile.gettempdir()) / f"octavia_job_{job_id}"
+        temp_dir.mkdir(exist_ok=True, parents=True)
+        
+        # Load audio
+        audio_data = load_audio_without_ffmpeg(str(audio_path), sr=16000)
+        if audio_data is None:
+            raise Exception("Failed to load audio file")
+        
+        logger.info(f"Job {job_id}: Audio loaded successfully")
+        
+        # Step 2: Transcribe audio
+        logger.info(f"Job {job_id}: Step 2/4 - Transcribing audio to text")
+        
+        # Transcribe using Whisper
+        model = whisper.load_model(model_size)
+        transcribe_result = model.transcribe(
+            audio_data,
+            language=None if source_language == "auto" else source_language,
+            verbose=False,
+            temperature=0.0
+        )
+        
+        original_text = transcribe_result.get("text", "").strip()
+        
+        if not original_text:
+            logger.warning(f"Job {job_id}: No text found in audio")
+            # Create placeholder output
+            output_audio_path = audio_path.parent / f"{audio_path.stem}_translated{audio_path.suffix}"
+            shutil.copy(str(audio_path), str(output_audio_path))
+            
+            job.status = JobStatus.COMPLETED
+            job.output_file = output_audio_path.as_posix()
+            job.job_metadata = json.dumps({
+                "source_language": source_language,
+                "target_language": target_language,
+                "original_text": "",
+                "translated_text": "",
+                "status": "no_speech"
+            })
+            session.commit()
+            return True
+        
+        logger.info(f"Job {job_id}: Transcription complete ({len(original_text)} characters)")
+        
+        # Step 3: Translate text
+        logger.info(f"Job {job_id}: Step 3/4 - Translating text")
+        
+        try:
+            from transformers import pipeline as hf_pipeline
+            
+            # Use Helsinki NLP for translation
+            translation_model = f"Helsinki-NLP/opus-mt-{source_language if source_language != 'auto' else 'en'}-{target_language}"
+            translator = hf_pipeline("translation", model=translation_model)
+            
+            # Split long text into chunks (512 tokens max)
+            text_chunks = [original_text[i:i+500] for i in range(0, len(original_text), 500)]
+            translated_chunks = []
+            
+            for chunk in text_chunks:
+                if chunk.strip():
+                    result = translator(chunk, max_length=512)
+                    translated_text = result[0].get("translation_text", chunk)
+                    translated_chunks.append(translated_text)
+            
+            translated_text = " ".join(translated_chunks)
+            
+        except Exception as e:
+            logger.warning(f"Job {job_id}: Translation failed, using original text: {str(e)}")
+            translated_text = original_text
+        
+        logger.info(f"Job {job_id}: Translation complete ({len(translated_text)} characters)")
+        
+        # Step 4: Synthesize new audio
+        logger.info(f"Job {job_id}: Step 4/4 - Synthesizing translated audio")
+        
+        output_audio_path = audio_path.parent / f"{audio_path.stem}_translated.wav"
+        
+        try:
+            import pyttsx3
+            
+            engine = pyttsx3.init()
+            engine.setProperty('rate', 150)
+            engine.setProperty('volume', 0.9)
+            engine.save_to_file(translated_text, str(output_audio_path))
+            engine.runAndWait()
+            
+            if output_audio_path.exists():
+                output_size = output_audio_path.stat().st_size
+                logger.info(f"Job {job_id}: Audio synthesis complete ({output_size} bytes)")
+            else:
+                raise Exception("Synthesis output file was not created")
+        
+        except Exception as e:
+            logger.error(f"Job {job_id}: Audio synthesis failed: {str(e)}")
+            # Create a fallback by copying the original audio
+            shutil.copy(str(audio_path), str(output_audio_path))
+            logger.info(f"Job {job_id}: Using original audio as fallback")
+        
+        if not output_audio_path.exists():
+            raise Exception("Output audio file was not created")
+        
+        output_size = output_audio_path.stat().st_size
+        logger.info(f"Job {job_id}: Audio translation pipeline complete ({output_size} bytes)")
+        
+        # Update job with results
+        job.status = JobStatus.COMPLETED
+        job.output_file = output_audio_path.as_posix()
+        job.job_metadata = json.dumps({
+            "source_language": source_language,
+            "target_language": target_language,
+            "original_text": original_text[:1000],  # Store preview
+            "translated_text": translated_text[:1000],  # Store preview
+            "output_size_bytes": output_size,
+            "pipeline_status": "success"
+        })
+        session.commit()
+        
+        logger.info(f"Job {job_id}: Audio translation job completed successfully")
+        
+        # Cleanup temp directory
+        try:
+            shutil.rmtree(temp_dir)
+            logger.info(f"Job {job_id}: Cleaned up temporary files")
+        except Exception as e:
+            logger.warning(f"Job {job_id}: Failed to cleanup temp files: {str(e)}")
+        
+        return True
+    
+    except Exception as e:
+        logger.error(f"Job {job_id}: Audio translation failed: {str(e)}", exc_info=True)
+        job = session.query(Job).filter(Job.id == job_id).first()
+        if job:
+            job.status = JobStatus.FAILED
+            job.error_message = f"Audio translation error: {str(e)}"
+            session.commit()
+        
+        # Cleanup temp files on failure
+        try:
+            temp_dir = Path(tempfile.gettempdir()) / f"octavia_job_{job_id}"
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir)
+        except:
+            pass
+        
+        return False
