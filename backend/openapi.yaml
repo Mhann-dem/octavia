@@ -1,0 +1,644 @@
+openapi: 3.0.3
+info:
+  title: Octavia API
+  description: |
+    Octavia is a video/audio translation backend service with two main components:
+    - API Gateway (Go): Handles authentication, job management, and billing
+    - AI Worker (Python): Processes translation jobs asynchronously
+
+    This API uses session-based authentication with Redis. All protected endpoints require a valid session cookie.
+  version: "1.0.0"
+  contact:
+    name: Octavia Support
+    email: support@octavia.example.com
+  license:
+    name: MIT License
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.octavia.example.com
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Jobs
+    description: Translation job management
+  - name: Billing
+    description: Credit management and billing operations
+  - name: Health
+    description: Service health checks
+
+paths:
+  /api/v1/auth/signup:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      description: Creates a new user account and returns session information
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupRequest"
+      responses:
+        "200":
+          description: User successfully created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security: []
+
+  /api/v1/auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Authenticate user
+      description: Logs in a user and creates a session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Successful login
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security: []
+
+  /api/v1/auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout user
+      description: Invalidates the current session
+      responses:
+        "200":
+          description: Successfully logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: No session found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - sessionAuth: []
+
+  /api/v1/upload/presign:
+    post:
+      tags:
+        - Jobs
+      summary: Get presigned upload URL
+      description: Generates a presigned URL for file upload (local storage in development)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresignRequest"
+      responses:
+        "200":
+          description: Presigned URL generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PresignResponse"
+        "400":
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - sessionAuth: []
+
+  /api/v1/jobs:
+    post:
+      tags:
+        - Jobs
+      summary: Create a new translation job
+      description: Creates a new translation job and deducts credits from user account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobCreateRequest"
+      responses:
+        "201":
+          description: Job created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobResponse"
+        "400":
+          description: Invalid request data or insufficient credits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - sessionAuth: []
+
+  /api/v1/jobs/{id}:
+    get:
+      tags:
+        - Jobs
+      summary: Get job status
+      description: Retrieves the status and details of a specific translation job
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Job ID (UUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Job details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobResponse"
+        "400":
+          description: Invalid job ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - sessionAuth: []
+
+  /api/v1/billing/credit:
+    post:
+      tags:
+        - Billing
+      summary: Add credits to user account
+      description: Adds credits to a user account (service-to-service endpoint)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreditRequest"
+      responses:
+        "200":
+          description: Credits added successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreditResponse"
+        "400":
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Invalid service API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - serviceAuth: []
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Checks if the AI worker service is healthy
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: Service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security: []
+
+components:
+  schemas:
+    SignupRequest:
+      type: object
+      required:
+        - email
+        - password
+        - name
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: user@example.com
+        password:
+          type: string
+          minLength: 8
+          description: User password
+          example: securepassword123
+        name:
+          type: string
+          description: User full name
+          example: John Doe
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: user@example.com
+        password:
+          type: string
+          description: User password
+          example: securepassword123
+
+    PresignRequest:
+      type: object
+      required:
+        - file_name
+        - file_size
+        - language
+      properties:
+        file_name:
+          type: string
+          description: Name of the file to upload
+          example: audio.mp3
+        file_size:
+          type: integer
+          minimum: 1
+          description: Size of the file in bytes
+          example: 1048576
+        language:
+          type: string
+          description: Language code of the audio content
+          example: en
+
+    JobCreateRequest:
+      type: object
+      required:
+        - source_file_url
+        - source_lang
+        - target_lang
+        - duration
+      properties:
+        source_file_url:
+          type: string
+          format: uri
+          description: URL of the uploaded source file
+          example: http://localhost:8080/upload/audio_12345678-1234-5678-1234-567812345678_20240101123456.mp3
+        source_lang:
+          type: string
+          description: Source language code
+          example: en
+        target_lang:
+          type: string
+          description: Target language code
+          example: es
+        duration:
+          type: integer
+          minimum: 1
+          description: Duration of the audio in seconds
+          example: 60
+
+    CreditRequest:
+      type: object
+      required:
+        - user_id
+        - amount
+        - transaction_id
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: User ID to add credits to
+          example: 123e4567-e89b-12d3-a456-426614174000
+        amount:
+          type: number
+          format: float
+          minimum: 0.01
+          description: Amount of credits to add
+          example: 10.0
+        transaction_id:
+          type: string
+          description: Unique transaction ID for idempotency
+          example: txn_1234567890abcdef
+        source:
+          type: string
+          description: Source of the credits (e.g., "polar_checkout")
+          example: polar_checkout
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: User ID
+          example: 123e4567-e89b-12d3-a456-426614174000
+        email:
+          type: string
+          format: email
+          description: User email
+          example: user@example.com
+        name:
+          type: string
+          description: User name
+          example: John Doe
+        credits:
+          type: number
+          format: float
+          description: Current credit balance
+          example: 100.0
+        session:
+          type: object
+          properties:
+            user_id:
+              type: string
+              format: uuid
+            created_at:
+              type: string
+              format: date-time
+            user_agent:
+              type: string
+            ip:
+              type: string
+
+    PresignResponse:
+      type: object
+      properties:
+        upload_url:
+          type: string
+          format: uri
+          description: URL to upload the file to
+          example: http://localhost:8080/upload/audio_12345678-1234-5678-1234-567812345678_20240101123456.mp3
+        file_path:
+          type: string
+          description: Local file path where the file will be stored
+          example: ./storage/uploads/audio_12345678-1234-5678-1234-567812345678_20240101123456.mp3
+        expires_at:
+          type: string
+          format: date-time
+          description: When the upload URL expires
+          example: "2024-01-01T13:00:00Z"
+
+    JobResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Job ID
+          example: 123e4567-e89b-12d3-a456-426614174000
+        source_file_url:
+          type: string
+          format: uri
+          description: URL of the source file
+          example: http://localhost:8080/upload/audio.mp3
+        source_lang:
+          type: string
+          description: Source language code
+          example: en
+        target_lang:
+          type: string
+          description: Target language code
+          example: es
+        status:
+          type: string
+          enum: [pending, processing, succeeded, failed]
+          description: Current job status
+          example: processing
+        created_at:
+          type: string
+          format: date-time
+          description: When the job was created
+          example: "2024-01-01T12:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: When the job was last updated
+          example: "2024-01-01T12:01:00Z"
+        result_url:
+          type: string
+          format: uri
+          description: URL to the result file (if succeeded)
+          example: http://localhost:8080/results/123e4567-e89b-12d3-a456-426614174000.wav
+        error:
+          type: string
+          description: Error message (if failed)
+          example: "Failed to transcribe audio"
+
+    CreditResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: User ID
+          example: 123e4567-e89b-12d3-a456-426614174000
+        previous_credits:
+          type: number
+          format: float
+          description: Previous credit balance
+          example: 50.0
+        new_credits:
+          type: number
+          format: float
+          description: New credit balance
+          example: 60.0
+        amount:
+          type: number
+          format: float
+          description: Amount added
+          example: 10.0
+        transaction_id:
+          type: string
+          description: Transaction ID
+          example: txn_1234567890abcdef
+        created_at:
+          type: string
+          format: date-time
+          description: When the transaction was created
+          example: "2024-01-01T12:00:00Z"
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy]
+          description: Service status
+          example: healthy
+        worker_running:
+          type: boolean
+          description: Whether the AI worker is running
+          example: true
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Operation success status
+          example: true
+        message:
+          type: string
+          description: Success message
+          example: Successfully logged out
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: boolean
+          description: Error indicator
+          example: true
+        message:
+          type: string
+          description: Error message
+          example: Invalid credentials
+        code:
+          type: integer
+          description: HTTP status code
+          example: 401
+
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: octavia_session
+      description: |
+        Session-based authentication using HTTP-only cookie.
+        The session ID is stored in Redis with user information.
+        Cookie must be secure and HTTP-only.
+    serviceAuth:
+      type: apiKey
+      in: header
+      name: X-Service-API-Key
+      description: |
+        Service-to-service authentication using API key.
+        Required for internal service communication.
+        Must match the SERVICE_API_KEY environment variable.
+
+security:
+  - sessionAuth: []

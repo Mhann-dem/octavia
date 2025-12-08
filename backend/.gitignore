@@ -1,0 +1,5 @@
+tmp/
+.env
+ai-worker/storage/results/*
+ai-worker/storage/uploads/*
+ai-worker/__pycache__/

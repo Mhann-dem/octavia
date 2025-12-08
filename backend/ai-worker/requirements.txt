@@ -1,0 +1,11 @@
+aio-pika
+pydantic
+openai
+transformers
+torch
+torchaudio
+TTS
+soundfile
+numpy
+httpx
+python-dotenv

@@ -1,0 +1,101 @@
+version: "3.8"
+
+services:
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgres://octavia:octavia@postgres:5432/octavia?sslmode=disable
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - SESSION_SECRET=${SESSION_SECRET}
+      - SESSION_COOKIE_NAME=${SESSION_COOKIE_NAME}
+      - SESSION_TTL_SECONDS=${SESSION_TTL_SECONDS}
+      - PORT=8080
+      - SERVICE_API_KEY=${SERVICE_API_KEY}
+      - STORAGE_PATH=/app/storage
+      - UPLOAD_PATH=/app/storage/uploads
+      - RESULTS_PATH=/app/storage/results
+      - COST_PER_MINUTE=${COST_PER_MINUTE}
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - octavia
+
+  ai-worker:
+    build:
+      context: ./ai-worker
+      dockerfile: Dockerfile
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - RABBITMQ_QUEUE=${RABBITMQ_QUEUE}
+      - RABBITMQ_DLQ=${RABBITMQ_DLQ}
+      - API_BASE_URL=http://api-gateway:8080
+      - SERVICE_API_KEY=${SERVICE_API_KEY}
+      - STORAGE_PATH=/app/storage
+      - UPLOAD_PATH=/app/storage/uploads
+      - RESULTS_PATH=/app/storage/results
+      - USE_OPENAI=${USE_OPENAI}
+      - USE_HELSINKI=${USE_HELSINKI}
+      - USE_COQUI=${USE_COQUI}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - HELSINKI_MODEL_EN_ES=${HELSINKI_MODEL_EN_ES}
+      - HELSINKI_MODEL_EN_FR=${HELSINKI_MODEL_EN_FR}
+      - HELSINKI_MODEL_EN_DE=${HELSINKI_MODEL_EN_DE}
+      - COQUI_MODEL_NAME=${COQUI_MODEL_NAME}
+      - COQUI_VOCODER_NAME=${COQUI_VOCODER_NAME}
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      - rabbitmq
+      - api-gateway
+    networks:
+      - octavia
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=octavia
+      - POSTGRES_PASSWORD=octavia
+      - POSTGRES_DB=octavia
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - octavia
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - octavia
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - octavia
+
+volumes:
+  postgres-data:
+  redis-data:
+  rabbitmq-data:
+
+networks:
+  octavia:
+    driver: bridge
