@@ -8,7 +8,8 @@ export async function POST() {
       (await cookieStore).get("octavia_session")?.value || "";
 
     try {
-      await fetch(`${process.env.BACKEND_URL}/api/v1/auth/logout`, {
+      const backendBase = process.env.BACKEND_URL || 'http://localhost:8001';
+      await fetch(`${backendBase.replace(/\/$/, '')}/api/v1/auth/logout`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

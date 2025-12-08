@@ -23,7 +23,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    // suppress hydration warnings on the root html element to avoid
+    // client extension-injected attribute mismatches that block hydration
+    // (see React hydration-mismatch docs).
+    <html lang="en" className="dark" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-bg-dark text-white`}
       >

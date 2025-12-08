@@ -38,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Check auth state on mount
     useEffect(() => {
         if (checkAuth()) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setIsAuthenticated(true);
             // Optionally fetch user profile from /me endpoint (not yet implemented)
         }
@@ -45,10 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const login = async (email: string, password: string) => {
-        const res = await fetch('http://localhost:8001/login', {
+        const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001').replace(/\/$/, '');
+        const res = await fetch(`${apiBase}/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password }),
+            credentials: 'include',
         });
         if (!res.ok) {
             const data = await res.json();

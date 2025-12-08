@@ -36,7 +36,27 @@ export function clearAuthToken() {
  * Check if user is authenticated
  */
 export function isAuthenticated(): boolean {
+    // Prefer server-side authoritative check via /api/v1/auth/me in UI code.
+    // This helper remains a localStorage quick-check for legacy flows.
     return getAuthToken() !== null;
+}
+
+/**
+ * Query server to verify authentication (reads HttpOnly cookie).
+ * Returns the decoded payload or null.
+ */
+export async function fetchSession(): Promise<unknown | null> {
+    try {
+        const useProxy = process.env.NEXT_PUBLIC_USE_DEV_PROXY === 'true';
+        const apiBase = useProxy ? '' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001').replace(/\/$/, '');
+        const url = `${apiBase}/api/v1/auth/me`;
+        const res = await fetch(url, { credentials: 'include' });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data;
+    } catch {
+        return null;
+    }
 }
 
 /**
@@ -52,9 +72,14 @@ export async function authenticatedFetch(
     if (token) {
         headers.set('Authorization', `Bearer ${token}`);
     }
-    
-    return fetch(url, {
+    const useProxy = process.env.NEXT_PUBLIC_USE_DEV_PROXY === 'true';
+    const apiBase = useProxy ? '' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001').replace(/\/$/, '');
+    const target = url.startsWith('/') ? `${apiBase}${url}` : url;
+
+    return fetch(target, {
         ...options,
         headers,
+        // ensure cookies (httpOnly) are sent with requests to the API
+        credentials: 'include',
     });
 }

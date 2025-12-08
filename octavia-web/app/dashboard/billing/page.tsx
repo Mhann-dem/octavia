@@ -50,41 +50,38 @@ export default function BillingPage() {
     const [processingCheckout, setProcessingCheckout] = useState<string | null>(null);
 
     useEffect(() => {
-        fetchBillingData();
-    }, []);
+            fetchBillingData();
+        }, []);
 
     const fetchBillingData = async () => {
         try {
             setLoading(true);
             setError(null);
-            const token = localStorage.getItem("access_token");
-
-            if (!token) {
-                setError("Not authenticated");
-                return;
-            }
+            // Prefer authenticatedFetch which handles base URL and credentials
+            // Fallback to local token header if needed
+            const token = localStorage.getItem("access_token") || localStorage.getItem('octavia_token');
 
             const headers = {
-                Authorization: `Bearer ${token}`,
+                Authorization: token ? `Bearer ${token}` : undefined,
                 "Content-Type": "application/json",
             };
 
             // Fetch balance
-            const balanceRes = await fetch("http://localhost:8001/api/v1/billing/balance", { headers });
+            const balanceRes = await (await import('@/lib/auth')).authenticatedFetch('/api/v1/billing/balance', { headers });
             if (balanceRes.ok) {
                 const data: BillingBalance = await balanceRes.json();
                 setBalance(data.balance);
             }
 
             // Fetch pricing
-            const pricingRes = await fetch("http://localhost:8001/api/v1/billing/pricing", { headers });
+            const pricingRes = await (await import('@/lib/auth')).authenticatedFetch('/api/v1/billing/pricing', { headers });
             if (pricingRes.ok) {
                 const data: PricingData = await pricingRes.json();
                 setTiers(data.tiers);
             }
 
             // Fetch transactions
-            const transRes = await fetch("http://localhost:8001/api/v1/billing/transactions", { headers });
+            const transRes = await (await import('@/lib/auth')).authenticatedFetch('/api/v1/billing/transactions', { headers });
             if (transRes.ok) {
                 const data = await transRes.json();
                 setTransactions(data.transactions.slice(0, 10));
@@ -99,14 +96,14 @@ export default function BillingPage() {
     const handleBuyCredits = async (tierId: string) => {
         try {
             setProcessingCheckout(tierId);
-            const token = localStorage.getItem("access_token");
+            const token = localStorage.getItem("access_token") || localStorage.getItem('octavia_token');
 
             if (!token) {
                 setError("Not authenticated");
                 return;
             }
 
-            const res = await fetch("http://localhost:8001/api/v1/billing/checkout", {
+            const res = await (await import('@/lib/auth')).authenticatedFetch('/api/v1/billing/checkout', {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${token}`,

@@ -2,7 +2,7 @@
 import uuid
 import json
 import logging
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, Header
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, Header, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -21,24 +21,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["uploads"])
 
 
-def get_current_user(authorization: Optional[str] = Header(None)) -> str:
-    """Extract and validate user ID from JWT token in Authorization header."""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Missing authorization header")
-    
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(status_code=401, detail="Invalid authorization header format")
-    
-    token = parts[1]
+def get_current_user(authorization: Optional[str] = Header(None), request: Request = None) -> str:
+    """Extract and validate user ID from JWT token in Authorization header or HttpOnly cookie."""
+    token = security.extract_token_from_request(authorization=authorization, cookies=(request.cookies if request else None))
     payload = security.decode_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
-    
+
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
-    
+
     return user_id
 
 

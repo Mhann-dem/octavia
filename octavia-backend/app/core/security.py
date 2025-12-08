@@ -67,3 +67,26 @@ def get_bearer_token(authorization: Optional[str] = None) -> str:
     
     return parts[1]
 
+
+def extract_token_from_request(authorization: Optional[str] = None, cookies: Optional[dict] = None) -> str:
+    """Extract token either from Authorization header or from cookies.
+
+    This helper allows the application to accept HttpOnly cookies set by the
+    backend for SSR and normal Authorization headers for API clients.
+    """
+    # Prefer Authorization header if provided
+    if authorization:
+        parts = authorization.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            return parts[1]
+        raise HTTPException(status_code=401, detail="Invalid authorization header format")
+
+    # Fallback to cookie token
+    if cookies:
+        # Common cookie name used by the app
+        token = cookies.get("octavia_token") or cookies.get("token")
+        if token:
+            return token
+
+    raise HTTPException(status_code=401, detail="Missing authorization token")
+

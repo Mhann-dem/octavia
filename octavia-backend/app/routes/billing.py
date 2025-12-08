@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.core.database import get_db
-from app.core.security import decode_token, get_bearer_token
+from app.core.security import decode_token, get_bearer_token, extract_token_from_request
 from app.models import User
 from app.models.billing import (
     CreditPackage, Payment, PaymentStatus, PricingTier, 
@@ -31,20 +31,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/billing", tags=["billing"])
 
 
-def get_current_user(authorization: Optional[str] = Header(None)) -> str:
-    """Extract and validate user ID from JWT token."""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Missing authorization header")
-    
-    token = get_bearer_token(authorization)
+def get_current_user(authorization: Optional[str] = Header(None), request: Request = None) -> str:
+    """Extract and validate user ID from JWT token in header or cookie."""
+    token = extract_token_from_request(authorization=authorization, cookies=(request.cookies if request else None))
     payload = decode_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
-    
+
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
-    
+
     return user_id
 
 

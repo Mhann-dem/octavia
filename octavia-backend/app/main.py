@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -14,6 +14,7 @@ from app.utils.email import send_verification_email
 from app.routes.billing import router as billing_router
 from app.upload_routes import router as upload_router
 from app.sse_routes import router as sse_router
+from app.auth_routes import router as auth_router
 
 
 app = FastAPI(title="Octavia Backend")
@@ -25,6 +26,7 @@ Base.metadata.create_all(bind=engine)
 app.include_router(billing_router)
 app.include_router(upload_router)
 app.include_router(sse_router)
+app.include_router(auth_router)
 
 frontend = os.environ.get("NEXT_PUBLIC_APP_URL", "http://localhost:3000")
 
@@ -85,7 +87,7 @@ def verify(token: str, db_session: Session = Depends(get_db)):
 
 
 @app.post("/login", response_model=TokenResponse)
-def login(payload: LoginPayload, db_session: Session = Depends(get_db)):
+def login(payload: LoginPayload, response: Response, db_session: Session = Depends(get_db)):
     user = db_session.query(User).filter(User.email == payload.email).first()
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
@@ -95,4 +97,26 @@ def login(payload: LoginPayload, db_session: Session = Depends(get_db)):
     #     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email not verified")
 
     token = create_access_token({"sub": str(user.id), "type": "access"})
+
+    # Set token in an HttpOnly cookie so SSR requests can read it.
+    # Use secure cookies in production if TLS is enabled.
+    secure_cookie = os.environ.get("OCTAVIA_SECURE_COOKIES", "false").lower() in ("1", "true", "yes")
+    # Allow cross-site cookies in dev when the frontend is on a different origin.
+    # NOTE: browsers require SameSite=None for cross-site cookies. In production
+    # you should set OCTAVIA_SECURE_COOKIES=true and serve over HTTPS.
+    allow_cross_site = os.environ.get("OCTAVIA_ALLOW_CROSS_SITE_COOKIES", "true").lower() in ("1", "true", "yes")
+    cookie_name = "octavia_token"
+    samesite_setting = "none" if allow_cross_site else "lax"
+
+    response.set_cookie(
+        key=cookie_name,
+        value=token,
+        httponly=True,
+        secure=secure_cookie,
+        samesite=samesite_setting,
+        path="/",
+        max_age=60 * 60 * 24 * 7,  # 7 days
+    )
+
+    # Also return token in JSON for JS clients that still want to use it client-side
     return {"access_token": token}

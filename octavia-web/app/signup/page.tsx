@@ -20,7 +20,8 @@ export default function SignupPage() {
         setError(null);
         setLoading(true);
         try {
-            const res = await fetch("http://localhost:8001/signup", {
+            const apiBase = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001").replace(/\/$/, "");
+            const res = await fetch(`${apiBase}/signup`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password }),
@@ -37,8 +38,8 @@ export default function SignupPage() {
             }
             // Redirect to login after signup
             router.push("/login");
-        } catch (err: any) {
-            setError(err?.message || String(err));
+        } catch (err: unknown) {
+            setError((err as Error)?.message || String(err));
         } finally {
             setLoading(false);
         }

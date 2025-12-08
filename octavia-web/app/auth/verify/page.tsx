@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
@@ -27,8 +28,11 @@ export default function VerifyPage({
         setError(null);
 
         try {
-            const res = await fetch(`http://localhost:8001/verify?token=${encodeURIComponent(token)}`, {
+            const useProxy = process.env.NEXT_PUBLIC_USE_DEV_PROXY === 'true';
+            const apiBase = useProxy ? '' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001').replace(/\/$/, '');
+            const res = await fetch(`${apiBase}/verify?token=${encodeURIComponent(token)}`, {
                 method: 'GET',
+                credentials: 'include',
             });
             const data = await res.json();
             if (!res.ok) {
@@ -38,8 +42,8 @@ export default function VerifyPage({
             }
             setMessage('Email verified successfully! Redirecting to login...');
             setTimeout(() => router.push('/login'), 2000);
-        } catch (err: any) {
-            setError(err?.message || String(err));
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : String(err));
         } finally {
             setLoading(false);
         }
@@ -52,12 +56,11 @@ export default function VerifyPage({
                 style={{ width: "600px", height: "600px", position: "absolute", top: "-200px", right: "-100px", zIndex: 0 }} />
             <div className="glow-purple"
                 style={{ width: "400px", height: "400px", position: "absolute", bottom: "-100px", left: "100px", zIndex: 0 }} />
-
             <div className="relative z-10 w-full max-w-md p-6">
-                <a href="/" className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-8 transition-colors cursor-pointer">
+                <Link href="/" className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-8 transition-colors cursor-pointer">
                     <ArrowLeft className="w-4 h-4" />
                     Back to Home
-                </a>
+                </Link>
 
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}

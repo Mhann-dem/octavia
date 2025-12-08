@@ -19,12 +19,21 @@ export default function LoginPage() {
         setError(null);
         setLoading(true);
         try {
-            const res = await fetch("http://localhost:8001/login", {
+            const useProxy = process.env.NEXT_PUBLIC_USE_DEV_PROXY === 'true';
+            const apiBase = useProxy ? '' : (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001");
+            const loginUrl = `${apiBase.replace(/\/$/, "")}/login`;
+            // debug: log where we are posting
+            console.debug("Login: POST ->", loginUrl);
+
+            const res = await fetch(loginUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password }),
+                // ensure browser accepts HttpOnly Set-Cookie from the backend
+                credentials: 'include',
             });
             const data = await res.json();
+            console.debug("Login: response", res.status, data);
             if (!res.ok) {
                 setError(data?.detail || data?.message || "Login failed");
                 setLoading(false);
@@ -33,10 +42,41 @@ export default function LoginPage() {
             // store token using auth helper
             if (data?.access_token) {
                 setAuthToken(data.access_token);
+                console.debug("Login: token stored", Boolean(data.access_token));
             }
-            router.push('/dashboard');
-        } catch (err: any) {
-            setError(err?.message || String(err));
+            // Wait for server to set/authenticate the session cookie, then navigate.
+            const meUrl = `${apiBase.replace(/\/$/, "")}/api/v1/auth/me`;
+            async function waitForSession(retries = 6, intervalMs = 300) {
+                for (let i = 0; i < retries; i++) {
+                    try {
+                        const r = await fetch(meUrl, { credentials: 'include' });
+                        if (r.ok) return true;
+                    } catch (e) {
+                        // ignore and retry
+                    }
+                    await new Promise((res) => setTimeout(res, intervalMs));
+                }
+                return false;
+            }
+
+            const sessionReady = await waitForSession(8, 300);
+            if (sessionReady) {
+                try {
+                    router.push('/dashboard');
+                } catch (navErr) {
+                    console.warn('router.push failed, falling back to hard redirect', navErr);
+                    window.location.href = '/dashboard';
+                }
+            } else {
+                // Fallback: attempt a navigation anyway
+                try {
+                    router.push('/dashboard');
+                } catch (navErr) {
+                    window.location.href = '/dashboard';
+                }
+            }
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : String(err));
         } finally {
             setLoading(false);
         }
@@ -136,7 +176,7 @@ export default function LoginPage() {
                     </div>
 
                     <p className="mt-8 text-center text-sm text-slate-400">
-                        Don't have an account?{" "}
+                        Don&apos;t have an account?{" "}
                         <Link href="/signup" className="text-primary-purple-bright hover:text-white transition-colors font-medium">
                             Sign up
                         </Link>

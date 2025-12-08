@@ -53,3 +53,25 @@ def get_bearer_token(authorization: str | None = None) -> str:
         raise HTTPException(status_code=401, detail="Invalid authorization header format")
     
     return parts[1]
+
+
+def extract_token_from_request(authorization: str | None = None, cookies: dict | None = None) -> str:
+    """Extract token from Authorization header or cookies (compatibility helper).
+
+    This mirrors the helper used in app.core.security to allow both
+    header-based Bearer tokens and HttpOnly cookie tokens to be accepted.
+    """
+    # Prefer Authorization header if present
+    if authorization:
+        parts = authorization.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            return parts[1]
+        raise HTTPException(status_code=401, detail="Invalid authorization header format")
+
+    # Fallback to cookie token
+    if cookies:
+        token = cookies.get("octavia_token") or cookies.get("token")
+        if token:
+            return token
+
+    raise HTTPException(status_code=401, detail="Missing authorization token")

@@ -5,17 +5,29 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Menu, X } from "lucide-react";
+import { fetchSession, authenticatedFetch } from "@/lib/auth";
+import { useRouter } from "next/navigation";
 
 export function Navbar() {
     const [isScrolled, setIsScrolled] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [session, setSession] = useState<any | null>(null);
+    const router = useRouter();
 
     useEffect(() => {
-        const handleScroll = () => {
-            setIsScrolled(window.scrollY > 20);
-        };
+        const handleScroll = () => setIsScrolled(window.scrollY > 20);
         window.addEventListener("scroll", handleScroll);
         return () => window.removeEventListener("scroll", handleScroll);
+    }, []);
+
+    // Fetch server-side session (reads HttpOnly cookie) on client mount
+    useEffect(() => {
+        let mounted = true;
+        fetchSession().then((data) => {
+            if (!mounted) return;
+            setSession(data);
+        });
+        return () => { mounted = false; };
     }, []);
 
     return (
@@ -28,7 +40,6 @@ export function Navbar() {
             )}
         >
             <div className="container mx-auto px-6 flex items-center justify-between">
-                {/* Logo */}
                 {/* Logo */}
                 <Link href="/" className="flex items-center gap-4 group cursor-pointer select-none h-10">
                     <div className="relative w-8 h-8 flex items-center justify-center shrink-0">
@@ -46,15 +57,8 @@ export function Navbar() {
                         {/* Ambient Pulse Glow */}
                         <motion.div
                             className="absolute inset-0 bg-primary-purple/40 blur-xl rounded-full"
-                            animate={{
-                                opacity: [0.2, 0.5, 0.2],
-                                scale: [0.8, 1.2, 0.8],
-                            }}
-                            transition={{
-                                duration: 3,
-                                repeat: Infinity,
-                                ease: "easeInOut",
-                            }}
+                            animate={{ opacity: [0.2, 0.5, 0.2], scale: [0.8, 1.2, 0.8] }}
+                            transition={{ duration: 3, repeat: Infinity }}
                         />
                         {/* Hover Burst Glow */}
                         <div className="absolute inset-0 bg-white/40 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -72,21 +76,47 @@ export function Navbar() {
                 {/* Desktop Nav */}
                 <div className="hidden md:flex items-center gap-8">
                     <NavLink href="#features">Features</NavLink>
-                    <NavLink href="#how-it-works">How it Works</NavLink>
+                    <NavLink href="#how-it-works">How It Works</NavLink>
                     <NavLink href="#pricing">Pricing</NavLink>
                 </div>
 
                 {/* CTA Buttons */}
                 <div className="hidden md:flex items-center gap-4">
-                    <Link
-                        href="/login"
-                        className="text-sm font-medium text-gray-300 hover:text-white transition-colors"
-                    >
-                        Log in
-                    </Link>
-                    <Link href="/signup" className="btn-border-beam">
-                        <div className="btn-border-beam-inner">Get Started</div>
-                    </Link>
+                    {session && session.authenticated ? (
+                        <>
+                            <Link href="/dashboard" className="text-sm font-medium text-gray-300 hover:text-white transition-colors">
+                                Dashboard
+                            </Link>
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        await authenticatedFetch('/api/v1/auth/logout', { method: 'POST' });
+                                    } catch (e) {
+                                        // ignore logout errors for now
+                                    }
+                                    // clear local token and refresh UI
+                                    localStorage.removeItem('octavia_token');
+                                    setSession(null);
+                                    router.push('/');
+                                }}
+                                className="text-sm font-medium text-gray-300 hover:text-white transition-colors"
+                            >
+                                Log out
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <Link
+                                href="/login"
+                                className="text-sm font-medium text-gray-300 hover:text-white transition-colors"
+                            >
+                                Log in
+                            </Link>
+                            <Link href="/signup" className="btn-border-beam">
+                                <div className="btn-border-beam-inner">Get Started</div>
+                            </Link>
+                        </>
+                    )}
                 </div>
 
                 {/* Mobile Menu Toggle */}

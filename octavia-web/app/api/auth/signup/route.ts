@@ -25,8 +25,10 @@ export async function POST(request: Request) {
     const body = await request.json();
     const validatedData = signupSchema.parse(body);
 
+    const backendBase = process.env.BACKEND_URL || 'http://localhost:8001';
+
     const backendResponse = await fetch(
-      `${process.env.BACKEND_URL}/api/v1/auth/signup`,
+      `${backendBase.replace(/\/$/, '')}/signup`,
       {
         method: "POST",
         headers: {

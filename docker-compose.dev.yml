@@ -1,0 +1,21 @@
+version: '3.8'
+services:
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+
+  celery-worker:
+    image: python:3.11-slim
+    depends_on:
+      - redis
+    working_dir: /app
+    volumes:
+      - ./octavia-backend:/app
+    environment:
+      - REDIS_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - PYTHONUNBUFFERED=1
+    command: bash -lc "pip install -r /app/requirements.txt 2>/dev/null || true; celery -A app.celery_app.celery_app worker --loglevel=info"
+    restart: unless-stopped
