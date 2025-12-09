@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { Search, Filter, Download, ExternalLink, Clock, CheckCircle2, AlertCircle, Loader } from "lucide-react";
 import { getAuthToken } from "@/lib/auth";
 import { useRouter } from "next/navigation";
+import { downloadFile } from "@/lib/downloadHelper";
+import { DownloadProgressModal } from "@/components/DownloadProgressModal";
 
 interface Job {
     id: string;
@@ -29,6 +31,11 @@ export default function JobHistoryPage() {
     const [error, setError] = useState("");
     const [searchQuery, setSearchQuery] = useState("");
     const [filterType, setFilterType] = useState("all");
+    const [downloadProgress, setDownloadProgress] = useState(0);
+    const [downloadStatus, setDownloadStatus] = useState<"idle" | "downloading" | "completed" | "error">("idle");
+    const [downloadFilename, setDownloadFilename] = useState("");
+    const [downloadError, setDownloadError] = useState("");
+    const [showDownloadModal, setShowDownloadModal] = useState(false);
     const router = useRouter();
 
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8001";
@@ -92,34 +99,44 @@ export default function JobHistoryPage() {
     const handleDownload = async (jobId: string) => {
         try {
             const token = getAuthToken();
-            const response = await fetch(`${API_BASE_URL}/api/v1/jobs/${jobId}/download`, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            });
-
-            if (!response.ok) {
-                throw new Error("Download failed");
+            if (!token) {
+                setDownloadError("Not authenticated");
+                setDownloadStatus("error");
+                setShowDownloadModal(true);
+                return;
             }
 
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
+            setDownloadProgress(0);
+            setDownloadStatus("downloading");
+            setShowDownloadModal(true);
 
-            // Extract filename from content-disposition header
-            const contentDisposition = response.headers.get("content-disposition");
-            const filename = contentDisposition
-                ? contentDisposition.split("filename=")[1]?.replace(/"/g, "") || `job-${jobId}`
-                : `job-${jobId}`;
-
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(link);
+            await downloadFile(
+                `${API_BASE_URL}/api/v1/jobs/${jobId}/download`,
+                token,
+                {
+                    onProgress: (progress) => {
+                        setDownloadProgress(progress);
+                    },
+                    onSuccess: (filename) => {
+                        setDownloadFilename(filename);
+                        setDownloadStatus("completed");
+                        // Auto-close after 2 seconds if successful
+                        setTimeout(() => {
+                            setShowDownloadModal(false);
+                            setDownloadStatus("idle");
+                        }, 2000);
+                    },
+                    onError: (error) => {
+                        setDownloadError(error);
+                        setDownloadStatus("error");
+                    },
+                }
+            );
         } catch (err) {
-            alert("Failed to download file: " + (err instanceof Error ? err.message : "Unknown error"));
+            const errorMessage = err instanceof Error ? err.message : "Download failed";
+            setDownloadError(errorMessage);
+            setDownloadStatus("error");
+            setShowDownloadModal(true);
         }
     };
 
@@ -319,6 +336,19 @@ export default function JobHistoryPage() {
                             </div>
                         )}
                     </div>
+
+                    {/* Download Progress Modal */}
+                    <DownloadProgressModal
+                        isOpen={showDownloadModal}
+                        onClose={() => {
+                            setShowDownloadModal(false);
+                            setDownloadStatus("idle");
+                        }}
+                        filename={downloadFilename}
+                        progress={downloadProgress}
+                        status={downloadStatus as any}
+                        error={downloadError}
+                    />
                 </>
             )}
         </div>

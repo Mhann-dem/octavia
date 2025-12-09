@@ -23,12 +23,12 @@ export function withAuth<P extends object>(
 
         if (!isAuthenticated) {
             return (
-                <div className="min-h-screen w-full bg-bg-dark flex items-center justify-center">
+                <div className="min-h-screen w-full bg-bg-dark flex items-center justify-center" suppressHydrationWarning>
                     <p className="text-slate-400">Loading...</p>
                 </div>
             );
         }
 
-        return <Component {...props} />;
+        return <Component {...props} suppressHydrationWarning={true} />;
     };
 }
