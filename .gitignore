@@ -1,5 +1,249 @@
+# ====== Environment & Credentials ======
+.env
+.env.local
+.env.*.local
+.env.production.local
+.env.test.local
+.env.development.local
+*.key
+*.pem
+*.p12
+credentials.json
+
+# ====== Internal Documentation (Keep out of repo) ======
+# Development notes, session summaries, internal checklists
+AUDIO_TRANSLATION_*.md
+DOWNLOAD_*.md
+FINAL_STATUS.md
+GIT_SETUP_*.md
+IMPLEMENTATION_*.md
+INTEGRATION_STATUS.md
+LUNARTTECH_*.md
+PRESENTATION_*.md
+PROJECT_STATUS_*.md
+QUICK_REFERENCE.md
+SESSION_*.md
+START_HERE_*.md
+SUBMISSION_*.md
+TEST_REPORT.md
+VIDEO_PRESENTATION_*.md
+VIDEO_SUBMISSION_*.md
+VISUAL_*.md
+
+# Backend internal docs
+octavia-backend/ASYNC_*.md
+octavia-backend/BILLING.md
+octavia-backend/IMPLEMENTATION_*.md
+octavia-backend/LOCAL_*.md
+octavia-backend/README_DEV.md
+octavia-backend/REMAINING_*.md
+octavia-backend/SESSION_*.md
+octavia-backend/SYNTHESIS.md
+
+# Frontend internal docs
+octavia-web/others/
+
+# Stage/development directories
+stage/
+docs/
+
+# ====== Python ======
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.cover
+.hypothesis/
+.pytest_cache/
+*.pot
+*.mo
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*,cover
+
+# ====== Node/NPM ======
+node_modules/
+npm-debug.log
+npm-debug.log.*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+.npm
+.eslintcache
+.node_repl_history
+*.tsbuildinfo
+dist/
+.next/
+out/
+
+# ====== IDEs & Editors ======
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*~
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+*.log
+
+# ====== OS ======
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ====== Virtual Environments ======
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ====== Databases ======
+*.db
+*.sqlite
+*.sqlite3
+dev.db
+test.db
+*.dbm
+
+# ====== Uploads & Temp ======
+uploads/
+tmp/
+temp/
+.tmp/
+*.tmp
+test_videos/
+test_files/
+cache/
+.cache/
+
+# ====== Logs ======
+*.log
+logs/
+*.log.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ====== Build & Dist ======
+dist/
+build/
+*.bundle.js
+*.min.js
+*.min.css
+.next/
+out/
+*.egg-info/
+
+# ====== Testing ======
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+test-results/
+coverage/
+
+# ====== Docker ======
+.docker/
+docker-compose.override.yml
+
+# ====== IDE Specific ======
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+.idea/
+.idea_modules/
+*.sublime-workspace
+
+# ====== Celery ======
+celerybeat-schedule
+celerybeat.pid
+
+# ====== Audio/Video Files (Test) ======
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.mp3
+*.wav
+*.m4a
+*.flac
+*.ogg
+test_videos/
+test_audio/
+
+# ====== Project Specific ======
+# Keep uploaded files out of version control
+uploads/
+user_uploads/
+processed_files/
+output/
+
+# Development database
+dev.db
+local.db
+
+# Temp files
+.temp/
+.tmp/
+temp_*
+
+# ====== Legacy Files ======
 pyvideotrans/
 win-pyvideotrans-v3.85.7z
-.DS_Store
-octavia-backend/test_videos/*.mp4
-octavia-backend/test_videos/*.mp4
+
+# ====== Specific to Octavia ======
+# Don't commit generated files
+openapi.json
+/alembic/versions/
+
+# Local development overrides
+local_config.py
+debug_output.txt
+
+# ====== Important: DO NOT IGNORE THESE ======
+# Make sure to commit:
+# - All source code files (.py, .tsx, .ts, .js)
+# - package.json, requirements.txt
+# - Configuration files (.env.example)
+# - Documentation files
+# - Test files

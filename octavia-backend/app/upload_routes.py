@@ -2,7 +2,7 @@
 import uuid
 import json
 import logging
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, Header, Request
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, Header
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -11,7 +11,7 @@ from pathlib import Path
 
 from . import db, models, upload_schemas, workers
 from .core import security
-from .storage import save_upload, delete_file
+from .storage import save_upload, delete_file, get_file
 from .job_model import Job, JobStatus
 from .credit_calculator import CreditCalculator
 from .billing_routes import deduct_credits
@@ -21,17 +21,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["uploads"])
 
 
-def get_current_user(authorization: Optional[str] = Header(None), request: Request = None) -> str:
-    """Extract and validate user ID from JWT token in Authorization header or HttpOnly cookie."""
-    token = security.extract_token_from_request(authorization=authorization, cookies=(request.cookies if request else None))
+def get_current_user(authorization: Optional[str] = Header(None)) -> str:
+    """Extract and validate user ID from JWT token in Authorization header."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing authorization header")
+    
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid authorization header format")
+    
+    token = parts[1]
     payload = security.decode_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
-
+    
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
-
+    
     return user_id
 
 
@@ -199,6 +206,31 @@ def create_video_translate_job(
     return job
 
 
+@router.post("/jobs/audio-translate/create", response_model=upload_schemas.JobOut)
+def create_audio_translate_job(
+    request: upload_schemas.AudioTranslateRequest,
+    user_id: str = Depends(get_current_user),
+    db_session: Session = Depends(db.get_db),
+):
+    """Create an audio translation job."""
+    job = Job(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        job_type="audio_translate",
+        input_file=request.storage_path,  # Store full path
+        status=JobStatus.PENDING,
+        job_metadata=json.dumps({
+            "source_language": request.source_language,
+            "target_language": request.target_language,
+            "model_size": request.model_size,
+        }),
+    )
+    db_session.add(job)
+    db_session.commit()
+    db_session.refresh(job)
+    return job
+
+
 @router.get("/jobs/{job_id}", response_model=upload_schemas.JobOut)
 def get_job(
     job_id: str,
@@ -233,6 +265,7 @@ def process_job(
         process_translation,
         process_synthesis,
         process_video_translation,
+        process_audio_translation,
     )
     
     job = db_session.query(Job).filter(Job.id == job_id, Job.user_id == user_id).first()
@@ -358,6 +391,19 @@ def process_job(
             )
             job.celery_task_id = celery_task.id
         
+        elif job.job_type == "audio_translate":
+            logger.info(f"Queuing audio translation job {job_id} to {queue_name} queue")
+            source_lang = task_metadata.get("source_language", "auto")
+            target_lang = task_metadata.get("target_language", "es")
+            model_size = task_metadata.get("model_size", "base")
+            
+            celery_task = process_audio_translation.apply_async(
+                args=[job_id, user_id, input_file_path, source_lang, target_lang, model_size],
+                queue=queue_name,
+                task_id=f"audio_translate-{job_id}"
+            )
+            job.celery_task_id = celery_task.id
+        
         else:
             raise HTTPException(status_code=400, detail=f"Unknown job type: {job.job_type}")
         
@@ -412,7 +458,45 @@ def estimate_credits(
         raise HTTPException(status_code=400, detail=f"Error estimating credits: {str(e)}")
 
 
-@router.get("/jobs", response_model=list[upload_schemas.JobOut])
+@router.get("/jobs/{job_id}/download")
+async def download_job_output(
+    job_id: str,
+    user_id: str = Depends(get_current_user),
+    db_session: Session = Depends(db.get_db),
+):
+    """Download the output file for a completed job."""
+    # Get the job
+    job = db_session.query(Job).filter(
+        Job.id == job_id,
+        Job.user_id == user_id
+    ).first()
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    if job.status != "completed":
+        raise HTTPException(status_code=400, detail="Job is not completed")
+    
+    if not job.output_file:
+        raise HTTPException(status_code=404, detail="No output file for this job")
+    
+    # Retrieve the file from storage
+    file_data = get_file(job.output_file)
+    if not file_data:
+        raise HTTPException(status_code=404, detail="Output file not found in storage")
+    
+    # Extract filename from output_file path
+    output_filename = Path(job.output_file).name
+    
+    # Return file for download
+    return FileResponse(
+        content=file_data,
+        filename=output_filename,
+        media_type="application/octet-stream",
+    )
+
+
+@router.get("/jobs")
 def list_jobs(
     user_id: str = Depends(get_current_user),
     limit: int = Query(50, ge=1, le=100),
@@ -420,4 +504,19 @@ def list_jobs(
 ):
     """List all jobs for the current user."""
     jobs = db_session.query(Job).filter(Job.user_id == user_id).order_by(Job.created_at.desc()).limit(limit).all()
-    return jobs
+    return {
+        "jobs": [
+            {
+                "id": job.id,
+                "file_id": job.file_id,
+                "job_type": job.job_type,
+                "status": job.status.value if hasattr(job.status, 'value') else str(job.status),
+                "created_at": job.created_at.isoformat() if hasattr(job.created_at, 'isoformat') else str(job.created_at),
+                "updated_at": job.updated_at.isoformat() if hasattr(job.updated_at, 'isoformat') else str(job.updated_at),
+                "progress_percentage": job.progress_percentage,
+                "phase": job.phase,
+                "metadata": json.loads(job.metadata) if isinstance(job.metadata, str) else (job.metadata or {}),
+            }
+            for job in jobs
+        ]
+    }

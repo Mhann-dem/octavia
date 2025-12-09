@@ -6,6 +6,8 @@ import { motion } from "framer-motion";
 import { CheckCircle, AlertCircle, Loader, Download, Home } from "lucide-react";
 import Link from "next/link";
 import { getAuthToken } from "@/lib/auth";
+import { downloadFile } from "@/lib/downloadHelper";
+import { DownloadProgressModal } from "@/components/DownloadProgressModal";
 
 interface Job {
     id: string;
@@ -31,6 +33,11 @@ export default function VideoProgressPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [autoRefresh, setAutoRefresh] = useState(true);
+    const [downloadProgress, setDownloadProgress] = useState(0);
+    const [downloadStatus, setDownloadStatus] = useState<"idle" | "downloading" | "completed" | "error">("idle");
+    const [downloadFilename, setDownloadFilename] = useState("");
+    const [downloadError, setDownloadError] = useState("");
+    const [showDownloadModal, setShowDownloadModal] = useState(false);
 
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8001";
 
@@ -121,6 +128,52 @@ export default function VideoProgressPage() {
     const isFailed = job.status === "failed";
     const isProcessing = job.status === "processing" || job.status === "pending";
     const progress = job.progress_percentage || 0;
+
+    const handleDownload = async () => {
+        try {
+            const token = getAuthToken();
+            if (!token) {
+                setDownloadError("Not authenticated");
+                setDownloadStatus("error");
+                setShowDownloadModal(true);
+                return;
+            }
+
+            setDownloadProgress(0);
+            setDownloadStatus("downloading");
+            setShowDownloadModal(true);
+
+            await downloadFile(
+                `${API_BASE_URL}/api/v1/jobs/${jobId}/download`,
+                token,
+                {
+                    onProgress: (progress) => {
+                        setDownloadProgress(progress);
+                    },
+                    onSuccess: (filename) => {
+                        setDownloadFilename(filename);
+                        setDownloadStatus("completed");
+                        // Auto-close after 2 seconds if successful
+                        setTimeout(() => {
+                            setShowDownloadModal(false);
+                            setDownloadStatus("idle");
+                        }, 2000);
+                    },
+                    onError: (error) => {
+                        setDownloadError(error);
+                        setDownloadStatus("error");
+                    },
+                }
+            );
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : "Download failed";
+            setDownloadError(errorMessage);
+            setDownloadStatus("error");
+            setShowDownloadModal(true);
+        }
+    };
+        }
+    };
 
     return (
         <div className="space-y-8">
@@ -213,15 +266,15 @@ export default function VideoProgressPage() {
                             <h3 className="text-white font-bold">Your translated video is ready!</h3>
                             <p className="text-slate-400 text-sm mt-1">Download your translation or share it with others</p>
                         </div>
-                        <a
-                            href={`${API_BASE_URL}/api/v1/download/${jobId}`}
+                        <button
+                            onClick={handleDownload}
                             className="btn-border-beam"
                         >
                             <div className="btn-border-beam-inner flex items-center justify-center gap-2 py-3 px-6">
                                 <Download className="w-4 h-4" />
                                 Download
                             </div>
-                        </a>
+                        </button>
                     </div>
                 </motion.div>
             )}
@@ -357,6 +410,19 @@ export default function VideoProgressPage() {
                         )}
                     </div>
                 </div>
+
+                {/* Download Progress Modal */}
+                <DownloadProgressModal
+                    isOpen={showDownloadModal}
+                    onClose={() => {
+                        setShowDownloadModal(false);
+                        setDownloadStatus("idle");
+                    }}
+                    filename={downloadFilename}
+                    progress={downloadProgress}
+                    status={downloadStatus as any}
+                    error={downloadError}
+                />
             </div>
         </div>
     );
