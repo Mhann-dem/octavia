@@ -70,21 +70,21 @@ export default function BillingPage() {
             };
 
             // Fetch balance
-            const balanceRes = await fetch("http://localhost:8001/api/v1/billing/balance", { headers });
+            const balanceRes = await fetch(`${API_BASE_URL}/api/v1/billing/balance`, { headers });
             if (balanceRes.ok) {
                 const data: BillingBalance = await balanceRes.json();
                 setBalance(data.balance);
             }
 
             // Fetch pricing
-            const pricingRes = await fetch("http://localhost:8001/api/v1/billing/pricing", { headers });
+            const pricingRes = await fetch(`${API_BASE_URL}/api/v1/billing/pricing`, { headers });
             if (pricingRes.ok) {
                 const data: PricingData = await pricingRes.json();
                 setTiers(data.tiers);
             }
 
             // Fetch transactions
-            const transRes = await fetch("http://localhost:8001/api/v1/billing/transactions", { headers });
+            const transRes = await fetch(`${API_BASE_URL}/api/v1/billing/transactions`, { headers });
             if (transRes.ok) {
                 const data = await transRes.json();
                 setTransactions(data.transactions.slice(0, 10));
@@ -106,7 +106,7 @@ export default function BillingPage() {
                 return;
             }
 
-            const res = await fetch("http://localhost:8001/api/v1/billing/checkout", {
+            const res = await fetch(`${API_BASE_URL}/api/v1/billing/checkout`, {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${token}`,

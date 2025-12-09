@@ -496,7 +496,7 @@ async def download_job_output(
     )
 
 
-@router.get("/jobs", response_model=list[upload_schemas.JobOut])
+@router.get("/jobs")
 def list_jobs(
     user_id: str = Depends(get_current_user),
     limit: int = Query(50, ge=1, le=100),
@@ -504,4 +504,19 @@ def list_jobs(
 ):
     """List all jobs for the current user."""
     jobs = db_session.query(Job).filter(Job.user_id == user_id).order_by(Job.created_at.desc()).limit(limit).all()
-    return jobs
+    return {
+        "jobs": [
+            {
+                "id": job.id,
+                "file_id": job.file_id,
+                "job_type": job.job_type,
+                "status": job.status.value if hasattr(job.status, 'value') else str(job.status),
+                "created_at": job.created_at.isoformat() if hasattr(job.created_at, 'isoformat') else str(job.created_at),
+                "updated_at": job.updated_at.isoformat() if hasattr(job.updated_at, 'isoformat') else str(job.updated_at),
+                "progress_percentage": job.progress_percentage,
+                "phase": job.phase,
+                "metadata": json.loads(job.metadata) if isinstance(job.metadata, str) else (job.metadata or {}),
+            }
+            for job in jobs
+        ]
+    }

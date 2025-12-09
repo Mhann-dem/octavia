@@ -1,9 +1,150 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { FileText, Languages } from "lucide-react";
+import { FileText, Languages, Upload, Link as LinkIcon } from "lucide-react";
+import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { getAuthToken } from "@/lib/auth";
 
 export default function SubtitleTranslatePage() {
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [subtitleUrl, setSubtitleUrl] = useState("");
+    const [uploadMode, setUploadMode] = useState<"file" | "url">("file");
+    const [sourceLanguage, setSourceLanguage] = useState("en");
+    const [targetLanguage, setTargetLanguage] = useState("es");
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState("");
+    const router = useRouter();
+
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8001";
+
+    const handleFileSelect = (file: File | null) => {
+        setError("");
+        if (file) {
+            const ext = file.name.split(".").pop()?.toLowerCase();
+            if (["srt", "vtt", "ass"].includes(ext || "")) {
+                setSelectedFile(file);
+                setSubtitleUrl("");
+                setUploadMode("file");
+            } else {
+                setError("Please select a valid subtitle file (SRT, VTT, or ASS)");
+            }
+        }
+    };
+
+    const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const file = e.dataTransfer.files?.[0];
+        if (file) {
+            handleFileSelect(file);
+        }
+    };
+
+    const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            handleFileSelect(file);
+        }
+    };
+
+    const handleUrlPaste = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const url = e.target.value;
+        setSubtitleUrl(url);
+        setError("");
+        if (url) {
+            setSelectedFile(null);
+            setUploadMode("url");
+        }
+    };
+
+    const handleTranslate = async () => {
+        if (!selectedFile && !subtitleUrl) {
+            setError("Please select a subtitle file or paste a URL");
+            return;
+        }
+
+        setIsLoading(true);
+        setError("");
+        const token = getAuthToken();
+
+        try {
+            let storagePath = "";
+
+            // Step 1: Upload file if using file mode
+            if (selectedFile) {
+                const formData = new FormData();
+                formData.append("file", selectedFile);
+                formData.append("file_type", "subtitle");
+
+                const uploadResponse = await fetch(`${API_BASE_URL}/api/v1/upload`, {
+                    method: "POST",
+                    body: formData,
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                });
+
+                if (!uploadResponse.ok) {
+                    const errorData = await uploadResponse.json();
+                    throw new Error(errorData.detail || "Upload failed");
+                }
+
+                const uploadData = await uploadResponse.json();
+                storagePath = uploadData.storage_path;
+            } else {
+                storagePath = subtitleUrl;
+            }
+
+            // Step 2: Create translation job
+            const jobResponse = await fetch(`${API_BASE_URL}/api/v1/jobs/translate/create`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    file_id: selectedFile ? selectedFile.name : "url",
+                    storage_path: storagePath,
+                    source_language: sourceLanguage,
+                    target_language: targetLanguage,
+                    model_size: "base",
+                }),
+            });
+
+            if (!jobResponse.ok) {
+                const errorData = await jobResponse.json();
+                throw new Error(errorData.detail || "Failed to create job");
+            }
+
+            const jobData = await jobResponse.json();
+            const jobId = jobData.id;
+
+            // Step 3: Queue the job for processing
+            const processResponse = await fetch(`${API_BASE_URL}/api/v1/jobs/${jobId}/process`, {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            if (!processResponse.ok) {
+                const errorData = await processResponse.json();
+                throw new Error(errorData.detail || "Failed to process job");
+            }
+
+            // Success - redirect to progress page with job ID
+            router.push(`/dashboard/subtitles/progress?job_id=${jobId}`);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "An error occurred";
+            setError(message);
+            console.error("Translation error:", err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return (
         <div className="space-y-8">
             {/* Header */}
@@ -12,54 +153,148 @@ export default function SubtitleTranslatePage() {
                 <p className="text-slate-400 text-sm">Translate existing subtitle files to another language</p>
             </div>
 
-            {/* Upload Zone */}
-            <motion.div
-                whileHover={{ scale: 1.01 }}
-                className="glass-panel glass-panel-high relative border-2 border-dashed border-primary-purple/30 hover:border-primary-purple/50 transition-all cursor-pointer group mb-6 overflow-hidden"
-            >
-                <div className="glass-shine" />
-                <div className="glow-purple" style={{ width: "300px", height: "300px", top: "50%", left: "50%", transform: "translate(-50%, -50%)", zIndex: 1 }} />
+            {/* Error Message */}
+            {error && (
+                <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-red-500/20 border border-red-500/50 rounded-lg p-4 text-red-300 text-sm"
+                >
+                    {error}
+                </motion.div>
+            )}
 
-                <div className="relative z-20 py-12 px-6">
-                    <div className="flex flex-col items-center justify-center gap-3 text-center">
-                        <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary-purple/10 border border-primary-purple/30 shadow-glow group-hover:scale-110 transition-transform">
-                            <FileText className="w-8 h-8 text-primary-purple-bright" />
-                        </div>
-                        <div>
-                            <h3 className="text-white text-lg font-bold mb-1 text-glow-purple">Drop subtitle file here</h3>
-                            <p className="text-slate-400 text-sm">or click to browse files • SRT, VTT, ASS supported</p>
+            {/* Upload Tabs */}
+            <div className="flex gap-2 mb-4">
+                <button
+                    onClick={() => setUploadMode("file")}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                        uploadMode === "file"
+                            ? "bg-primary-purple/30 border border-primary-purple/50 text-white"
+                            : "bg-slate-800/50 border border-slate-700/50 text-slate-400 hover:text-white"
+                    }`}
+                >
+                    <Upload className="w-4 h-4" />
+                    Upload File
+                </button>
+                <button
+                    onClick={() => setUploadMode("url")}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                        uploadMode === "url"
+                            ? "bg-primary-purple/30 border border-primary-purple/50 text-white"
+                            : "bg-slate-800/50 border border-slate-700/50 text-slate-400 hover:text-white"
+                    }`}
+                >
+                    <LinkIcon className="w-4 h-4" />
+                    Paste URL
+                </button>
+            </div>
+
+            {/* Upload Zone */}
+            {uploadMode === "file" ? (
+                <motion.div
+                    whileHover={{ scale: 1.01 }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="glass-panel glass-panel-high relative border-2 border-dashed border-primary-purple/30 hover:border-primary-purple/50 transition-all cursor-pointer group mb-6 overflow-hidden"
+                >
+                    <div className="glass-shine" />
+
+                    <div className="relative z-20 py-12 px-6">
+                        <div className="flex flex-col items-center justify-center gap-3 text-center">
+                            <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary-purple/10 border border-primary-purple/30 shadow-glow group-hover:scale-110 transition-transform">
+                                <FileText className="w-8 h-8 text-primary-purple-bright" />
+                            </div>
+                            <div>
+                                <h3 className="text-white text-lg font-bold mb-1 text-glow-purple">
+                                    {selectedFile ? "✓ File Selected" : "Drop subtitle file here"}
+                                </h3>
+                                {selectedFile ? (
+                                    <p className="text-slate-300 text-sm">{selectedFile.name}</p>
+                                ) : (
+                                    <p className="text-slate-400 text-sm">or click to browse files • SRT, VTT, ASS supported</p>
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
-            </motion.div>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".srt,.vtt,.ass"
+                        onChange={handleFileInputChange}
+                        className="hidden"
+                    />
+                </motion.div>
+            ) : (
+                <motion.div className="glass-panel glass-panel-high p-6 mb-6">
+                    <div className="flex flex-col gap-3">
+                        <label htmlFor="subtitle-url" className="text-white text-sm font-semibold">Subtitle URL</label>
+                        <input
+                            id="subtitle-url"
+                            type="url"
+                            title="Subtitle URL"
+                            placeholder="https://example.com/subtitles.srt"
+                            value={subtitleUrl}
+                            onChange={handleUrlPaste}
+                            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-primary-purple/50 transition-colors"
+                        />
+                        {subtitleUrl && <p className="text-accent-cyan text-sm">✓ URL ready for processing</p>}
+                    </div>
+                </motion.div>
+            )}
 
             {/* Configuration */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div className="glass-card p-4">
-                    <label className="text-white text-sm font-semibold mb-2 block">Source Language</label>
-                    <select className="glass-select w-full">
-                        <option>English</option>
-                        <option>Spanish</option>
-                        <option>French</option>
-                        <option>German</option>
+                    <label htmlFor="source-lang" className="text-white text-sm font-semibold mb-2 block">Source Language</label>
+                    <select
+                        id="source-lang"
+                        title="Select source language"
+                        value={sourceLanguage}
+                        onChange={(e) => setSourceLanguage(e.target.value)}
+                        className="glass-select w-full"
+                    >
+                        <option value="en">English</option>
+                        <option value="es">Spanish</option>
+                        <option value="fr">French</option>
+                        <option value="de">German</option>
+                        <option value="it">Italian</option>
+                        <option value="pt">Portuguese</option>
+                        <option value="ja">Japanese</option>
+                        <option value="zh">Chinese</option>
                     </select>
                 </div>
                 <div className="glass-card p-4">
-                    <label className="text-white text-sm font-semibold mb-2 block">Target Language</label>
-                    <select className="glass-select w-full">
-                        <option>Spanish</option>
-                        <option>English</option>
-                        <option>French</option>
-                        <option>German</option>
+                    <label htmlFor="target-lang" className="text-white text-sm font-semibold mb-2 block">Target Language</label>
+                    <select
+                        id="target-lang"
+                        title="Select target language"
+                        value={targetLanguage}
+                        onChange={(e) => setTargetLanguage(e.target.value)}
+                        className="glass-select w-full"
+                    >
+                        <option value="es">Spanish</option>
+                        <option value="en">English</option>
+                        <option value="fr">French</option>
+                        <option value="de">German</option>
+                        <option value="it">Italian</option>
+                        <option value="pt">Portuguese</option>
+                        <option value="ja">Japanese</option>
+                        <option value="zh">Chinese</option>
                     </select>
                 </div>
             </div>
 
             {/* Start Button */}
-            <button className="btn-border-beam w-full group">
+            <button
+                onClick={handleTranslate}
+                disabled={isLoading || (!selectedFile && !subtitleUrl)}
+                className="btn-border-beam w-full group disabled:opacity-50 disabled:cursor-not-allowed"
+            >
                 <div className="btn-border-beam-inner flex items-center justify-center gap-2 py-4 text-base">
-                    <Languages className="w-5 h-5" />
-                    <span>Translate Subtitles</span>
+                    <Languages className="w-5 h-5 group-hover:rotate-12 transition-transform duration-300" />
+                    <span>{isLoading ? "Processing..." : "Translate Subtitles"}</span>
                 </div>
             </button>
         </div>

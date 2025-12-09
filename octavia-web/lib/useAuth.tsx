@@ -38,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Check auth state on mount
     useEffect(() => {
         if (checkAuth()) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setIsAuthenticated(true);
             // Optionally fetch user profile from /me endpoint (not yet implemented)
         }
