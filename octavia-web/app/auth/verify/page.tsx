@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
 
@@ -38,8 +39,8 @@ export default function VerifyPage({
             }
             setMessage('Email verified successfully! Redirecting to login...');
             setTimeout(() => router.push('/login'), 2000);
-        } catch (err: any) {
-            setError(err?.message || String(err));
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : String(err));
         } finally {
             setLoading(false);
         }
@@ -52,12 +53,11 @@ export default function VerifyPage({
                 style={{ width: "600px", height: "600px", position: "absolute", top: "-200px", right: "-100px", zIndex: 0 }} />
             <div className="glow-purple"
                 style={{ width: "400px", height: "400px", position: "absolute", bottom: "-100px", left: "100px", zIndex: 0 }} />
-
             <div className="relative z-10 w-full max-w-md p-6">
-                <a href="/" className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-8 transition-colors cursor-pointer">
+                <Link href="/" className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-8 transition-colors cursor-pointer">
                     <ArrowLeft className="w-4 h-4" />
                     Back to Home
-                </a>
+                </Link>
 
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}

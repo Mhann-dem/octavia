@@ -35,8 +35,9 @@ export default function LoginPage() {
                 setAuthToken(data.access_token);
             }
             router.push('/dashboard');
-        } catch (err: any) {
-            setError(err?.message || String(err));
+        } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : String(err);
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -136,7 +137,7 @@ export default function LoginPage() {
                     </div>
 
                     <p className="mt-8 text-center text-sm text-slate-400">
-                        Don't have an account?{" "}
+                        Don&apos;t have an account?{" "}
                         <Link href="/signup" className="text-primary-purple-bright hover:text-white transition-colors font-medium">
                             Sign up
                         </Link>

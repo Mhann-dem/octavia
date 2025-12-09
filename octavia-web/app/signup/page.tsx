@@ -37,8 +37,8 @@ export default function SignupPage() {
             }
             // Redirect to login after signup
             router.push("/login");
-        } catch (err: any) {
-            setError(err?.message || String(err));
+        } catch (err: unknown) {
+            setError((err instanceof Error ? err.message : String(err)) || "An error occurred");
         } finally {
             setLoading(false);
         }
