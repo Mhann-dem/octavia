@@ -68,15 +68,6 @@ class SynthesizeRequest(BaseModel):
     speed: Optional[float] = 1.0
 
 
-class AudioTranslateRequest(BaseModel):
-    """Request to translate audio."""
-    file_id: str
-    storage_path: str
-    source_language: str = "en"
-    target_language: str = "es"
-    model_size: Optional[str] = "base"  # base, small, medium, large
-
-
 class EstimateRequest(BaseModel):
     """Request to estimate credit cost."""
     job_type: str

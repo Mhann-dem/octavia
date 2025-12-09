@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
-const BACKEND = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001').replace(/\/$/, '');
+// Use server-side env var (not NEXT_PUBLIC_*) for backend URL
+const BACKEND = (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001').replace(/\/$/, '');
 
 export async function POST(request: Request) {
   const url = `${BACKEND}/login`;

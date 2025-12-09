@@ -18,64 +18,65 @@ export default function LoginPage() {
         e.preventDefault();
         setError(null);
         setLoading(true);
+        
         try {
             const useProxy = process.env.NEXT_PUBLIC_USE_DEV_PROXY === 'true';
             const apiBase = useProxy ? '' : (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001");
             const loginUrl = useProxy ? '/api/proxy/login' : `${apiBase.replace(/\/$/, "")}/login`;
-            // debug: log where we are posting
+            
             console.debug("Login: POST ->", loginUrl);
 
             const res = await fetch(loginUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password }),
-                // ensure browser accepts HttpOnly Set-Cookie from the backend
                 credentials: 'include',
             });
+
+            // Check if response is JSON before parsing
+            const contentType = res.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                const text = await res.text();
+                console.error("Non-JSON response:", text.substring(0, 200));
+                throw new Error("Server returned non-JSON response. Check backend.");
+            }
+
             const data = await res.json();
             console.debug("Login: response", res.status, data);
+            
             if (!res.ok) {
                 setError(data?.detail || data?.message || "Login failed");
                 setLoading(false);
                 return;
             }
-            // store token using auth helper
+
+            // CRITICAL: Store token BEFORE navigating
             if (data?.access_token) {
                 setAuthToken(data.access_token);
-                console.debug("Login: token stored", Boolean(data.access_token));
-            }
-            // Wait for server to set/authenticate the session cookie, then navigate.
-            const meUrl = useProxy ? '/api/v1/auth/me' : `${apiBase.replace(/\/$/, "")}/api/v1/auth/me`;
-            async function waitForSession(retries = 6, intervalMs = 300) {
-                for (let i = 0; i < retries; i++) {
-                    try {
-                        const r = await fetch(meUrl, { credentials: 'include' });
-                        if (r.ok) return true;
-                    } catch (e) {
-                        // ignore and retry
-                    }
-                    await new Promise((res) => setTimeout(res, intervalMs));
+                console.debug("Login: token stored in localStorage");
+                
+                // Verify token was actually stored
+                const storedToken = localStorage.getItem('octavia_token');
+                console.debug("Login: token verification:", !!storedToken);
+                
+                if (!storedToken) {
+                    throw new Error("Failed to store authentication token");
                 }
-                return false;
+            } else {
+                throw new Error("No access token in response");
             }
 
-            const sessionReady = await waitForSession(8, 300);
-            if (sessionReady) {
-                // Prefer client router but enforce a hard redirect to guarantee navigation
-                try {
-                    router.push('/dashboard');
-                } catch (navErr) {
-                    console.warn('router.push failed, falling back to hard redirect', navErr);
-                }
-                // Ensure navigation even if router.push silently no-ops
-                window.location.href = '/dashboard';
-            } else {
-                // Fallback: perform a hard redirect
-                window.location.href = '/dashboard';
-            }
+            // Small delay to ensure localStorage write completes
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            console.debug("Login: navigating to dashboard");
+            
+            // Use hard redirect to ensure clean page load with new auth state
+            window.location.href = '/dashboard';
+            
         } catch (err: unknown) {
+            console.error("Login error:", err);
             setError(err instanceof Error ? err.message : String(err));
-        } finally {
             setLoading(false);
         }
     }
@@ -123,6 +124,7 @@ export default function LoginPage() {
                                     type="email"
                                     placeholder="name@example.com"
                                     className="glass-input w-full !pl-12"
+                                    required
                                 />
                             </div>
                         </div>
@@ -136,6 +138,7 @@ export default function LoginPage() {
                                     type="password"
                                     placeholder="••••••••"
                                     className="glass-input w-full !pl-12"
+                                    required
                                 />
                             </div>
                         </div>
@@ -147,7 +150,11 @@ export default function LoginPage() {
                         </button>
                     </form>
 
-                    {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
+                    {error && (
+                        <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                            <p className="text-sm text-red-400">{error}</p>
+                        </div>
+                    )}
 
                     <div className="mt-6">
                         <div className="relative">
@@ -160,13 +167,13 @@ export default function LoginPage() {
                         </div>
 
                         <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors text-sm text-white">
+                            <button type="button" className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors text-sm text-white">
                                 <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                                     <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.74 1.18 0 2.21-.93 3.69-.93.95 0 2.58.5 3.63 1.62-3.28 1.66-2.57 6.62 1.3 8.21-.63 1.72-1.62 3.45-3.7 3.33zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
                                 </svg>
                                 Apple
                             </button>
-                            <button className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors text-sm text-white">
+                            <button type="button" className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors text-sm text-white">
                                 <span className="font-bold">G</span>
                                 Google
                             </button>
