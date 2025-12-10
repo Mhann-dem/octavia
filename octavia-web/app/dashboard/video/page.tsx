@@ -73,9 +73,8 @@ export default function VideoTranslationPage() {
             if (selectedFile) {
                 const formData = new FormData();
                 formData.append("file", selectedFile);
-                formData.append("file_type", "video");
 
-                const uploadResponse = await fetch(`${API_BASE_URL}/api/v1/upload`, {
+                const uploadResponse = await fetch(`${API_BASE_URL}/api/v1/upload?file_type=video`, {
                     method: "POST",
                     body: formData,
                     headers: {

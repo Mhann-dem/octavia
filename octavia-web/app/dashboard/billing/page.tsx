@@ -41,6 +41,8 @@ const CREDIT_COSTS = {
     video_translate: 5,
 };
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8001";
+
 export default function BillingPage() {
     const [balance, setBalance] = useState<number>(0);
     const [tiers, setTiers] = useState<PricingTier[]>([]);

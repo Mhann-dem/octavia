@@ -45,11 +45,24 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> str:
 @router.post("/upload", response_model=upload_schemas.UploadResponse)
 async def upload_file(
     file: UploadFile = File(...),
-    file_type: str = Query(...),  # 'video', 'audio', 'subtitle'
+    file_type: str = Query(...),  # 'video', 'audio', 'subtitle' (as query parameter)
     user_id: str = Depends(get_current_user),
     db_session: Session = Depends(db.get_db),
 ):
-    """Upload a media file for processing."""
+    """Upload a media file for processing.
+    
+    Args:
+        file: The file to upload (multipart form data)
+        file_type: Type of file - 'video', 'audio', or 'subtitle' (query parameter)
+        user_id: Current user ID (from JWT token)
+        db_session: Database session
+    
+    Example:
+        POST /api/v1/upload?file_type=video
+        Content-Type: multipart/form-data
+        
+        file: <binary file data>
+    """
     # Validate file type
     if file_type not in ("video", "audio", "subtitle"):
         raise HTTPException(status_code=400, detail="Invalid file_type. Must be video, audio, or subtitle")

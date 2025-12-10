@@ -75,9 +75,8 @@ export default function SubtitleGenerationPage() {
                 fileType = selectedFile.type.startsWith("audio/") ? "audio" : "video";
                 const formData = new FormData();
                 formData.append("file", selectedFile);
-                formData.append("file_type", fileType);
 
-                const uploadResponse = await fetch(`${API_BASE_URL}/api/v1/upload`, {
+                const uploadResponse = await fetch(`${API_BASE_URL}/api/v1/upload?file_type=${fileType}`, {
                     method: "POST",
                     body: formData,
                     headers: {

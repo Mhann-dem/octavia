@@ -5,8 +5,9 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { CheckCircle, Loader, AlertCircle, Download, SkipBack } from "lucide-react";
 import { getAuthToken } from "@/lib/auth";
+import { Suspense } from "react";
 
-export default function AudioTranslationProgressPage() {
+function AudioTranslationProgressContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const jobId = searchParams.get("job_id");
@@ -293,5 +294,13 @@ export default function AudioTranslationProgressPage() {
                 </motion.div>
             )}
         </div>
+    );
+}
+
+export default function AudioTranslationProgressPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <AudioTranslationProgressContent />
+        </Suspense>
     );
 }
